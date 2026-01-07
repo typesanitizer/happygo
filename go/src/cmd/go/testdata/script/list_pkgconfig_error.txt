@@ -1,5 +1,10 @@
 [!cgo] skip 'test verifies cgo pkg-config errors'
 [!exec:pkg-config] skip 'test requires pkg-config tool'
+# NOTE(happygo): LUCI Windows builders seem to skip this test
+# because pkg-config is not on PATH. However, the presence of
+# pkg-config on GHA Windows runners causes this test to run,
+# which leads to a failure. So adding an explicit skip below.
+[GOOS:windows] skip 'Windows pkg-config error output differs (Strawberry pkg-config)'
 
 ! go list -export .
 stderr '^# example\n# \[pkg-config .*\]\n(.*\n)*(Package .* not found)|(could not find package .*)'

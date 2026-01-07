@@ -3,6 +3,11 @@
 [!exec:swig] skip
 [!exec:g++] skip
 [!cgo] skip
+# NOTE(happygo): This test is not run on Windows upstream because swig
+# is not installed on LUCI Windows builders. On GHA Windows, swig is
+# available but the test fails because $GOCACHE backslashes are
+# interpreted as regex escapes in the stdout pattern match.
+[GOOS:windows] skip 'swig not tested on Windows upstream; path handling issues on GHA'
 
 # CompiledGoFiles should contain 4 files:
 #  a.go
