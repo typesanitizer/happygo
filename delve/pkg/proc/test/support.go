@@ -439,7 +439,9 @@ func ProjectRoot() string {
 			return filepath.Join(curpath, "src", "github.com", "go-delve", "delve")
 		}
 	}
-	val, err := exec.Command("go", "list", "-mod=", "-m", "-f", "{{ .Dir }}").Output()
+	cmd := exec.Command("go", "list", "-mod=", "-m", "-f", "{{ .Dir }}")
+	cmd.Env = append(os.Environ(), "GOWORK=off")
+	val, err := cmd.Output()
 	if err != nil {
 		panic(err) // the Go tool was tested to work earlier
 	}

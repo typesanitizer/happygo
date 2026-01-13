@@ -9,6 +9,10 @@ on:
 # STYLE NOTES:
 # - Do not change the working directory (using 'cd' or otherwise).
 
+env:
+  GOCACHE: ${{ github.workspace }}/.cache/go-build
+  GOMODCACHE: ${{ github.workspace }}/.cache/go-mod
+
 jobs:
   build-head:
     name: build-head (${{ matrix.os }})
@@ -21,12 +25,13 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: 1.25.x
+          cache: false
       - uses: actions/cache@v5
         with:
-          path: ~/.cache/go-build
-          key: go-build-head-${{ matrix.os }}-${{ github.head_ref || github.ref_name }}
-          restore-keys: |
-            go-build-head-${{ matrix.os }}-
+          path: |
+            .cache/go-build
+            .cache/go-mod
+          key: go-head-${{ matrix.os }}
       # make.bash cannot be invoked from other directories
       - name: build (unix)
         if: runner.os != 'Windows'
@@ -38,12 +43,16 @@ jobs:
         shell: pwsh
         working-directory: go\src
         run: .\make.bat
+      # actions/upload-artifact drops executable bits; tar preserves mode bits in the archive.
+      # See https://github.com/actions/upload-artifact/issues/38
+      - name: package toolchain (tar)
+        shell: bash
+        run: tar -czf go-head-${{ matrix.os }}.tgz go/bin go/pkg
       - uses: actions/upload-artifact@v6
         with:
           name: go-head-${{ matrix.os }}
           path: |
-            go/bin
-            go/pkg
+            go-head-${{ matrix.os }}.tgz
 
   build-gotip:
     name: build-gotip (${{ matrix.os }})
@@ -57,16 +66,17 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: 1.25.x
+          cache: false
       - uses: actions/checkout@v6
         with:
           repository: golang/go
           path: gotip
       - uses: actions/cache@v5
         with:
-          path: ~/.cache/go-build
-          key: go-build-gotip-${{ matrix.os }}-${{ github.head_ref || github.ref_name }}
-          restore-keys: |
-            go-build-gotip-${{ matrix.os }}-
+          path: |
+            .cache/go-build
+            .cache/go-mod
+          key: go-gotip-${{ matrix.os }}
       # make.bash cannot be invoked from other directories
       - name: build (unix)
         if: runner.os != 'Windows'
@@ -78,12 +88,16 @@ jobs:
         shell: pwsh
         working-directory: gotip\src
         run: .\make.bat
+      # actions/upload-artifact drops executable bits; tar preserves mode bits in the archive.
+      # See https://github.com/actions/upload-artifact/issues/38
+      - name: package toolchain (tar)
+        shell: bash
+        run: tar -czf go-gotip-${{ matrix.os }}.tgz gotip/bin gotip/pkg
       - uses: actions/upload-artifact@v6
         with:
           name: go-gotip-${{ matrix.os }}
           path: |
-            gotip/bin
-            gotip/pkg
+            go-gotip-${{ matrix.os }}.tgz
 
   test-std:
     name: test-std (${{ matrix.os }})
@@ -98,18 +112,20 @@ jobs:
         with:
           name: go-head-${{ matrix.os }}
           path: .
-      - uses: actions/cache@v5
+      - name: unpack toolchain (tar)
+        shell: bash
+        run: tar -xzf go-head-${{ matrix.os }}.tgz -p
+      - uses: actions/cache/restore@v5
         with:
-          path: ~/.cache/go-build
-          key: go-build-head-${{ matrix.os }}-${{ github.head_ref || github.ref_name }}
-          restore-keys: |
-            go-build-head-${{ matrix.os }}-
+          path: |
+            .cache/go-build
+            .cache/go-mod
+          key: go-head-${{ matrix.os }}
       - name: test
         shell: bash
         run: |
           export GOROOT="$PWD/go"
           export PATH="$GOROOT/bin:$PATH"
-          export GOCACHE="$HOME/.cache/go-build"
           go tool dist test -run='!^cmd'
 
   test-cmd:
@@ -125,18 +141,20 @@ jobs:
         with:
           name: go-head-${{ matrix.os }}
           path: .
-      - uses: actions/cache@v5
+      - name: unpack toolchain (tar)
+        shell: bash
+        run: tar -xzf go-head-${{ matrix.os }}.tgz -p
+      - uses: actions/cache/restore@v5
         with:
-          path: ~/.cache/go-build
-          key: go-build-head-${{ matrix.os }}-${{ github.head_ref || github.ref_name }}
-          restore-keys: |
-            go-build-head-${{ matrix.os }}-
+          path: |
+            .cache/go-build
+            .cache/go-mod
+          key: go-head-${{ matrix.os }}
       - name: test
         shell: bash
         run: |
           export GOROOT="$PWD/go"
           export PATH="$GOROOT/bin:$PATH"
-          export GOCACHE="$HOME/.cache/go-build"
           go tool dist test -run='^cmd'
 
   test-tools-stable:
@@ -150,6 +168,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: 1.25.x
+          cache: false
       - name: test
         run: go test -C tools ./...
 
@@ -166,18 +185,20 @@ jobs:
         with:
           name: go-head-${{ matrix.os }}
           path: .
-      - uses: actions/cache@v5
+      - name: unpack toolchain (tar)
+        shell: bash
+        run: tar -xzf go-head-${{ matrix.os }}.tgz -p
+      - uses: actions/cache/restore@v5
         with:
-          path: ~/.cache/go-build
-          key: go-build-head-${{ matrix.os }}-${{ github.head_ref || github.ref_name }}
-          restore-keys: |
-            go-build-head-${{ matrix.os }}-
+          path: |
+            .cache/go-build
+            .cache/go-mod
+          key: go-head-${{ matrix.os }}
       - name: test
         shell: bash
         run: |
           export GOROOT="$PWD/go"
           export PATH="$GOROOT/bin:$PATH"
-          export GOCACHE="$HOME/.cache/go-build"
           go test -C tools ./...
 
   test-tools-gotip:
@@ -194,18 +215,20 @@ jobs:
         with:
           name: go-gotip-${{ matrix.os }}
           path: .
-      - uses: actions/cache@v5
+      - name: unpack toolchain (tar)
+        shell: bash
+        run: tar -xzf go-gotip-${{ matrix.os }}.tgz -p
+      - uses: actions/cache/restore@v5
         with:
-          path: ~/.cache/go-build
-          key: go-build-gotip-${{ matrix.os }}-${{ github.head_ref || github.ref_name }}
-          restore-keys: |
-            go-build-gotip-${{ matrix.os }}-
+          path: |
+            .cache/go-build
+            .cache/go-mod
+          key: go-gotip-${{ matrix.os }}
       - name: test
         shell: bash
         run: |
           export GOROOT="$PWD/gotip"
           export PATH="$GOROOT/bin:$PATH"
-          export GOCACHE="$HOME/.cache/go-build"
           go test -C tools ./...
 
   test-delve-stable:
@@ -219,6 +242,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: 1.25.x
+          cache: false
       - name: test
         run: go test -C delve ./...
 
@@ -235,18 +259,20 @@ jobs:
         with:
           name: go-head-${{ matrix.os }}
           path: .
-      - uses: actions/cache@v5
+      - name: unpack toolchain (tar)
+        shell: bash
+        run: tar -xzf go-head-${{ matrix.os }}.tgz -p
+      - uses: actions/cache/restore@v5
         with:
-          path: ~/.cache/go-build
-          key: go-build-head-${{ matrix.os }}-${{ github.head_ref || github.ref_name }}
-          restore-keys: |
-            go-build-head-${{ matrix.os }}-
+          path: |
+            .cache/go-build
+            .cache/go-mod
+          key: go-head-${{ matrix.os }}
       - name: test
         shell: bash
         run: |
           export GOROOT="$PWD/go"
           export PATH="$GOROOT/bin:$PATH"
-          export GOCACHE="$HOME/.cache/go-build"
           go test -C delve ./...
 
   test-delve-gotip:
@@ -263,16 +289,18 @@ jobs:
         with:
           name: go-gotip-${{ matrix.os }}
           path: .
-      - uses: actions/cache@v5
+      - name: unpack toolchain (tar)
+        shell: bash
+        run: tar -xzf go-gotip-${{ matrix.os }}.tgz -p
+      - uses: actions/cache/restore@v5
         with:
-          path: ~/.cache/go-build
-          key: go-build-gotip-${{ matrix.os }}-${{ github.head_ref || github.ref_name }}
-          restore-keys: |
-            go-build-gotip-${{ matrix.os }}-
+          path: |
+            .cache/go-build
+            .cache/go-mod
+          key: go-gotip-${{ matrix.os }}
       - name: test
         shell: bash
         run: |
           export GOROOT="$PWD/gotip"
           export PATH="$GOROOT/bin:$PATH"
-          export GOCACHE="$HOME/.cache/go-build"
           go test -C delve ./...
