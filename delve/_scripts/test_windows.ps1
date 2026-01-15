@@ -1,3 +1,6 @@
+# If the dependencies installed in this file are changed, you
+# may need to update the CI setup as well.
+# See NOTE(id: delve-windows-test-dep-setup)
 param (
     [Parameter(Mandatory = $true)][string]$version,
     [Parameter(Mandatory = $true)][string]$arch,
