@@ -282,7 +282,11 @@ func ProducerAfterOrEqual(producer string, major, minor int) bool {
 	if ver.IsOldDevel() {
 		return true
 	}
-	return ver.AfterOrEqual(GoVersion{major, minor, 0, "", ""})
+	// NOTE(happygo): Fix this for consistency with VersionAfterOrEqual.
+	// Otherwise, as of Jan 15 2026, recent gotip builds with 1.26devel
+	// get interpreted as being lower than < 1.26, causing TestGotoA1
+	// to fail for arm64.
+	return ver.AfterOrEqual(GoVersion{major, minor, versionedDevel, "", ""})
 }
 
 func ParseProducer(producer string) GoVersion {
