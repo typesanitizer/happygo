@@ -1122,7 +1122,12 @@ func TestRangeOverFuncNext(t *testing.T) {
 			})
 		})
 
-		if goversion.VersionAfterOrEqual(runtime.Version(), 1, 26) && runtime.GOARCH == "arm64" {
+		// NOTE(happygo): Upstream uses runtime.Version() here,
+		// which is logically incorrect because the debuginfo
+		// depends on the toolchain version used to compile the
+		// fixtures, not the toolchain version used to compile
+		// delve's own test packages.
+		if goversion.ProducerAfterOrEqual(p.BinInfo().Producer(), 1, 26) && runtime.GOARCH == "arm64" {
 			t.Run("TestGotoA1", func(t *testing.T) {
 				testseq2intl(t, fixture, grp, p, nil, []seqTest{
 					funcBreak(t, "main.TestGotoA1"),

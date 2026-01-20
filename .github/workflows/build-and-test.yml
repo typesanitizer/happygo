@@ -1,0 +1,142 @@
+name: build-and-test
+
+on:
+  workflow_call:
+    inputs:
+      os:
+        required: true
+        type: string
+
+# STYLE NOTES:
+# - Do not change the working directory (using 'cd' or otherwise).
+
+env:
+  GOCACHE: ${{ github.workspace }}/.cache/go-build
+
+jobs:
+  build-head:
+    runs-on: ${{ inputs.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/build-toolchain
+        with:
+          os: ${{ inputs.os }}
+          toolchain: head
+
+  build-gotip:
+    runs-on: ${{ inputs.os }}
+    steps:
+      # Sparse checkout: only fetch .github/ to access the action.
+      # The action will checkout golang/go into go/.
+      - uses: actions/checkout@v6
+        with:
+          sparse-checkout: .github
+      - uses: ./.github/actions/build-toolchain
+        with:
+          os: ${{ inputs.os }}
+          toolchain: gotip
+
+  test-std:
+    runs-on: ${{ inputs.os }}
+    needs: build-head
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-head-toolchain
+        with:
+          os: ${{ inputs.os }}
+      - name: Test
+        shell: bash
+        run: |
+          export GOROOT="$PWD/go"
+          export PATH="$GOROOT/bin:$PATH"
+          go tool dist test -run='!^cmd'
+
+  test-cmd:
+    runs-on: ${{ inputs.os }}
+    needs: build-head
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-head-toolchain
+        with:
+          os: ${{ inputs.os }}
+      - name: Test
+        shell: bash
+        run: |
+          export GOROOT="$PWD/go"
+          export PATH="$GOROOT/bin:$PATH"
+          go tool dist test -run='^cmd'
+
+  test-tools:
+    runs-on: ${{ inputs.os }}
+    needs: build-head
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-head-toolchain
+        with:
+          os: ${{ inputs.os }}
+      - name: Test
+        shell: bash
+        run: |
+          export GOROOT="$PWD/go"
+          export PATH="$GOROOT/bin:$PATH"
+          go test -C tools ./...
+
+  test-delve:
+    name: test-delve (${{ matrix.go-toolchain }})
+    runs-on: ${{ inputs.os }}
+    needs: [build-head, build-gotip]
+    continue-on-error: ${{ matrix.go-toolchain == 'gotip' }}
+    strategy:
+      matrix:
+        go-toolchain: [head, stable, gotip]
+    steps:
+      - uses: actions/checkout@v6
+      # Stable Go is used only for fixture builds; capture its GOROOT before PATH changes.
+      - uses: actions/setup-go@v5
+        if: matrix.go-toolchain == 'stable'
+        with:
+          go-version: 1.25.x
+          # setup-go cache warns when GOCACHE is customized; we manage caching explicitly.
+          # See https://github.com/typesanitizer/happygo/actions/runs/20907489161/job/60063662688
+          cache: false
+      - name: Capture stable GOROOT
+        id: stable-goroot
+        if: matrix.go-toolchain == 'stable'
+        shell: bash
+        run: echo "path=$(go env GOROOT)" >> $GITHUB_OUTPUT
+      - uses: ./.github/actions/setup-head-toolchain
+        with:
+          os: ${{ inputs.os }}
+      - uses: actions/download-artifact@v7
+        if: matrix.go-toolchain == 'gotip'
+        with:
+          name: go-gotip-${{ inputs.os }}
+          path: .
+      - name: Unpack toolchain (tar)
+        if: matrix.go-toolchain == 'gotip'
+        shell: bash
+        run: |
+          mkdir -p gotip
+          tar -xzf go-gotip-${{ inputs.os }}.tgz -p -C gotip
+      # NOTE(id: delve-windows-test-dep-setup): Mirrors logic in delve/_scripts/test_windows.ps1.
+      - name: Install procdump (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://download.sysinternals.com/files/Procdump.zip" -OutFile "$env:TEMP\procdump.zip"
+          Expand-Archive -Force -LiteralPath "$env:TEMP\procdump.zip" -DestinationPath "$env:RUNNER_TOOL_CACHE\procdump"
+          echo "$env:RUNNER_TOOL_CACHE\procdump" >> $env:GITHUB_PATH
+      - name: Test
+        shell: bash
+        env:
+          STABLE_GO_ROOT: ${{ steps.stable-goroot.outputs.path }}
+        run: |
+          export GOROOT="$PWD/go"
+          export PATH="$GOROOT/bin:$PATH"
+          # Use a custom go tool when building fixtures for stable/gotip.
+          case "${{ matrix.go-toolchain }}" in
+            stable) export DELVE_TEST_GO="$STABLE_GO_ROOT/bin/go" ;;
+            gotip)  export DELVE_TEST_GO="$PWD/gotip/bin/go" ;;
+            head)   ;;
+          esac
+          go test -C delve ./...

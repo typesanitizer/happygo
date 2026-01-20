@@ -1,5 +1,10 @@
 # Test go mod tidy -diff
 # If set, -diff should not update go.mod or go.sum and instead return a non-zero exit code if updates are needed.
+# NOTE(happygo): LUCI Windows builders seem to skip this test
+# because patch.exe is not on PATH. However, the presence of
+# patch.exe on GHA Windows runners causes this test to run,
+# which leads to an assertion failure. So adding an explicit skip below.
+[GOOS:windows] skip 'Windows patch.exe asserts when applying diff'
 
 # Missing go.mod and go.sum should fail and not display diff.
 ! exists go.mod

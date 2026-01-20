@@ -1,0 +1,20 @@
+name: setup-head-toolchain
+description: Download and unpack the head toolchain and restore its build cache.
+inputs:
+  os:
+    description: Runner OS label used in artifact and cache keys.
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/download-artifact@v7
+      with:
+        name: go-head-${{ inputs.os }}
+        path: .
+    - name: Unpack toolchain (tar)
+      shell: bash
+      run: tar -xzf go-head-${{ inputs.os }}.tgz -p
+    - uses: actions/cache/restore@v5
+      with:
+        path: .cache/go-build
+        key: go-cache-head-${{ inputs.os }}

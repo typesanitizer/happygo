@@ -3203,6 +3203,9 @@ func TestBreakpointVariablesWithoutG(t *testing.T) {
 func TestGuessSubstitutePath(t *testing.T) {
 	protest.MustHaveModules(t)
 
+	// NOTE(happygo): This test doesn't work in workspace mode because
+	// ProjectRoot() returns multiple modules and -mod=mod is incompatible.
+	t.Setenv("GOWORK", "off")
 	t.Setenv("NOCERT", "1")
 	ver, _ := goversion.Parse(runtime.Version())
 	if ver.IsDevelBuild() && os.Getenv("CI") != "" && runtime.GOOS == "linux" {
