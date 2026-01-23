@@ -136,6 +136,9 @@ jobs:
         run: |
           export GOROOT="$PWD/go"
           export PATH="$GOROOT/bin:$PATH"
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            export DELVE_TEST_LOG_DIR="$PWD/.cache/tmp/delve-test-logs"
+          fi
           # Use a custom go tool when building fixtures for stable/gotip.
           case "${{ matrix.go-toolchain }}" in
             stable) export DELVE_TEST_GO="$STABLE_GO_ROOT/bin/go" ;;
@@ -143,3 +146,10 @@ jobs:
             head)   ;;
           esac
           go test -C delve ./...
+      - name: Upload delve logs (failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: delve-test-logs-${{ inputs.os }}-${{ matrix.go-toolchain }}
+          path: .cache/tmp/delve-test-logs
+          if-no-files-found: ignore
