@@ -5607,14 +5607,18 @@ func TestReadTargetArguments(t *testing.T) {
 	})
 }
 
-func testWaitForSetup(t *testing.T, mu *sync.Mutex, started *bool) (*exec.Cmd, *proc.WaitFor) {
+func testWaitForSetup(t *testing.T, mu *sync.Mutex, started *bool) (*exec.Cmd, *proc.WaitFor, string) {
 	var buildFlags protest.BuildFlags
 	if buildMode == "pie" {
 		buildFlags |= protest.BuildModePIE
 	}
 	fixture := protest.BuildFixture(t, "loopprog", buildFlags)
 
-	cmd := exec.Command(fixture.Path)
+	// NOTE(happygo): Pass t.Name() as an argument to make the command line unique per test.
+	// This prevents WaitFor from matching stale processes from previous tests
+	// that may still be visible in Windows process snapshots.
+	uniqueArg := t.Name()
+	cmd := exec.Command(fixture.Path, uniqueArg)
 
 	go func() {
 		time.Sleep(2 * time.Second)
@@ -5626,9 +5630,9 @@ func testWaitForSetup(t *testing.T, mu *sync.Mutex, started *bool) (*exec.Cmd, *
 		mu.Unlock()
 	}()
 
-	waitFor := &proc.WaitFor{Name: fixture.Path, Interval: 100 * time.Millisecond, Duration: 10 * time.Second}
+	waitFor := &proc.WaitFor{Name: fixture.Path + " " + uniqueArg, Interval: 100 * time.Millisecond, Duration: 10 * time.Second}
 
-	return cmd, waitFor
+	return cmd, waitFor, fixture.Path
 }
 
 func TestWaitFor(t *testing.T) {
@@ -5638,7 +5642,7 @@ func TestWaitFor(t *testing.T) {
 	var mu sync.Mutex
 	started := false
 
-	cmd, waitFor := testWaitForSetup(t, &mu, &started)
+	cmd, waitFor, _ := testWaitForSetup(t, &mu, &started)
 
 	pid, err := native.WaitFor(waitFor)
 	assertNoError(err, t, "waitFor.Wait()")
@@ -5666,7 +5670,7 @@ func TestWaitForAttach(t *testing.T) {
 	var mu sync.Mutex
 	started := false
 
-	cmd, waitFor := testWaitForSetup(t, &mu, &started)
+	cmd, waitFor, fixturePath := testWaitForSetup(t, &mu, &started)
 
 	var p *proc.TargetGroup
 	var err error
@@ -5677,7 +5681,7 @@ func TestWaitForAttach(t *testing.T) {
 	case "lldb":
 		path := ""
 		if runtime.GOOS == "darwin" {
-			path = waitFor.Name
+			path = fixturePath
 		}
 		p, err = gdbserial.LLDBAttach(0, path, waitFor, []string{})
 	default:
