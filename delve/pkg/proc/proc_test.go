@@ -153,11 +153,7 @@ func gdbserialTestConfig(t testing.TB) *gdbserial.ProcessConfig {
 		_ = entry.gdbFile.Close()
 		_ = entry.serverFile.Close()
 		_ = entry.lifecycleFile.Close()
-		if !t.Failed() {
-			_ = os.Remove(entry.gdbPath)
-			_ = os.Remove(entry.serverPath)
-			_ = os.Remove(entry.lifecyclePath)
-		} else {
+		if t.Failed() {
 			t.Logf("gdb wire log: %s", entry.gdbPath)
 			t.Logf("lldbserver log: %s", entry.serverPath)
 			t.Logf("proc lifecycle log: %s", entry.lifecyclePath)
