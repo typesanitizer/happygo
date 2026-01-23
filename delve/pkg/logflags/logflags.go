@@ -34,24 +34,55 @@ var logOut io.WriteCloser
 var Bug = counter.NewStack("delve/bug", 16)
 
 func makeLogger(flag bool, attrs ...interface{}) Logger {
-	if lf := loggerFactory; lf != nil {
-		fields := make(Fields)
-		for i := 0; i < len(attrs); i += 2 {
-			fields[attrs[i].(string)] = attrs[i+1]
-		}
-		return lf(flag, fields, logOut)
+	fields := make(Fields)
+	for i := 0; i < len(attrs); i += 2 {
+		fields[attrs[i].(string)] = attrs[i+1]
 	}
+	return NewLogger(flag, fields, nil)
+}
 
-	var out io.WriteCloser = os.Stderr
-	if logOut != nil {
+// NewLogger creates a logger configured for the provided fields and output.
+// If out is nil it falls back to the global log output configured by Setup.
+func NewLogger(flag bool, fields Fields, out io.Writer) Logger {
+	if out == nil {
 		out = logOut
 	}
+	if lf := loggerFactory; lf != nil {
+		return lf(flag, fields, out)
+	}
+
+	var w io.WriteCloser
+	switch v := out.(type) {
+	case nil:
+		w = os.Stderr
+	case io.WriteCloser:
+		w = v
+	default:
+		w = nopWriteCloser{Writer: v}
+	}
+
 	level := slog.LevelError
 	if flag {
 		level = slog.LevelDebug
 	}
-	logger := slog.New(newTextHandler(out, &slog.HandlerOptions{Level: level})).With(attrs...)
+
+	logger := slog.New(newTextHandler(w, &slog.HandlerOptions{Level: level}))
+	if len(fields) > 0 {
+		attrs := make([]interface{}, 0, len(fields)*2)
+		for k, v := range fields {
+			attrs = append(attrs, k, v)
+		}
+		logger = logger.With(attrs...)
+	}
 	return slogLogger{logger}
+}
+
+type nopWriteCloser struct {
+	io.Writer
+}
+
+func (nopWriteCloser) Close() error {
+	return nil
 }
 
 // Any returns true if any logging is enabled.

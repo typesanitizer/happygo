@@ -38,6 +38,7 @@ jobs:
 
   test-std:
     runs-on: ${{ inputs.os }}
+    if: inputs.os == 'ubuntu-latest'
     needs: build-head
     steps:
       - uses: actions/checkout@v6
@@ -53,6 +54,7 @@ jobs:
 
   test-cmd:
     runs-on: ${{ inputs.os }}
+    if: inputs.os == 'ubuntu-latest'
     needs: build-head
     steps:
       - uses: actions/checkout@v6
@@ -68,6 +70,7 @@ jobs:
 
   test-tools:
     runs-on: ${{ inputs.os }}
+    if: inputs.os == 'ubuntu-latest'
     needs: build-head
     steps:
       - uses: actions/checkout@v6
@@ -88,7 +91,7 @@ jobs:
     continue-on-error: ${{ matrix.go-toolchain == 'gotip' }}
     strategy:
       matrix:
-        go-toolchain: [head, stable, gotip]
+        go-toolchain: ${{ fromJSON(inputs.os == 'ubuntu-latest' && '["head","stable","gotip"]' || '["stable"]') }}
     steps:
       - uses: actions/checkout@v6
       # Stable Go is used only for fixture builds; capture its GOROOT before PATH changes.

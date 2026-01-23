@@ -225,14 +225,15 @@ type gdbRegnames struct {
 // If process is not nil it is the stub's process and will be killed after
 // Detach.
 // Use Listen, Dial or Connect to complete connection.
-func newProcess(process *os.Process) *gdbProcess {
-	logger := logflags.GdbWireLogger()
+func newProcess(process *os.Process, logcfg LogConfig) *gdbProcess {
+	logger := logcfg.gdbWireLogger()
 	p := &gdbProcess{
 		conn: gdbConn{
 			maxTransmitAttempts: maxTransmitAttempts,
 			inbuf:               make([]byte, 0, initialInputBufferSize),
 			direction:           proc.Forward,
 			log:                 logger,
+			logEnabled:          logcfg.gdbWireEnabled(),
 			goarch:              runtime.GOARCH,
 			goos:                runtime.GOOS,
 		},
@@ -338,6 +339,10 @@ func (p *gdbProcess) Connect(conn net.Conn, path, cmdline string, pid int, debug
 		conn.Close()
 		return nil, err
 	}
+	if ferr := maybeInjectFault("connect", p); ferr != nil {
+		conn.Close()
+		return nil, ferr
+	}
 
 	if p.conn.isDebugserver {
 		// There are multiple problems with the 'g'/'G' commands on debugserver.
@@ -434,8 +439,8 @@ func canUnmaskSignals(debugServerExecutable string) bool {
 
 // commandLogger is a wrapper around the exec.Command() function to log the arguments prior to
 // starting the process
-func commandLogger(binary string, arguments ...string) *exec.Cmd {
-	logflags.GdbWireLogger().Debugf("executing %s %v", binary, arguments)
+func commandLogger(logger logflags.Logger, binary string, arguments ...string) *exec.Cmd {
+	logger.Debugf("executing %s %v", binary, arguments)
 	return exec.Command(binary, arguments...)
 }
 
@@ -460,6 +465,14 @@ func getLdEnvVars() []string {
 // it to launch the specified target program with the specified arguments
 // (cmd) on the specified directory wd.
 func LLDBLaunch(cmd []string, wd string, flags proc.LaunchFlags, debugInfoDirs []string, tty string, redirects [3]string) (*proc.TargetGroup, error) {
+	return LLDBLaunchWithConfig(cmd, wd, flags, debugInfoDirs, tty, redirects, nil)
+}
+
+// LLDBLaunchWithConfig starts an instance of lldb-server with the supplied config.
+func LLDBLaunchWithConfig(cmd []string, wd string, flags proc.LaunchFlags, debugInfoDirs []string, tty string, redirects [3]string, cfg *ProcessConfig) (*proc.TargetGroup, error) {
+	conf := normalizeProcessConfig(cfg)
+	logcfg := conf.Log
+	logger := logcfg.gdbWireLogger()
 	if runtime.GOOS == "windows" {
 		return nil, ErrUnsupportedOS
 	}
@@ -509,7 +522,7 @@ func LLDBLaunch(cmd []string, wd string, flags proc.LaunchFlags, debugInfoDirs [
 			}
 		}
 
-		if logflags.LLDBServerOutput() {
+		if logcfg.LLDBServerOutput {
 			args = append(args, "-g", "-l", "stdout")
 		}
 		if flags&proc.LaunchDisableASLR != 0 {
@@ -523,7 +536,7 @@ func LLDBLaunch(cmd []string, wd string, flags proc.LaunchFlags, debugInfoDirs [
 
 		isDebugserver = true
 
-		process = commandLogger(debugserverExecutable, args...)
+		process = commandLogger(logger, debugserverExecutable, args...)
 	} else {
 		if _, err = exec.LookPath("lldb-server"); err != nil {
 			return nil, &ErrBackendUnavailable{}
@@ -533,12 +546,13 @@ func LLDBLaunch(cmd []string, wd string, flags proc.LaunchFlags, debugInfoDirs [
 		args = append(args, "gdbserver", port, "--")
 		args = append(args, cmd...)
 
-		process = commandLogger("lldb-server", args...)
+		process = commandLogger(logger, "lldb-server", args...)
 	}
 
-	if logflags.LLDBServerOutput() || logflags.GdbWire() || foreground || hasRedirects {
-		process.Stdout = os.Stdout
-		process.Stderr = os.Stderr
+	if logcfg.wantsServerOutput() || foreground || hasRedirects {
+		stdout, stderr := logcfg.serverWriters()
+		process.Stdout = stdout
+		process.Stderr = stderr
 	}
 	if foreground || hasRedirects {
 		if isatty.IsTerminal(os.Stdin.Fd()) {
@@ -573,7 +587,7 @@ func LLDBLaunch(cmd []string, wd string, flags proc.LaunchFlags, debugInfoDirs [
 		return nil, err
 	}
 
-	p := newProcess(process.Process)
+	p := newProcess(process.Process, logcfg)
 	p.conn.isDebugserver = isDebugserver
 
 	var grp *proc.TargetGroup
@@ -598,6 +612,14 @@ func LLDBLaunch(cmd []string, wd string, flags proc.LaunchFlags, debugInfoDirs [
 // for some stubs that do not provide an automated way of determining it
 // (for example debugserver).
 func LLDBAttach(pid int, path string, waitFor *proc.WaitFor, debugInfoDirs []string) (*proc.TargetGroup, error) {
+	return LLDBAttachWithConfig(pid, path, waitFor, debugInfoDirs, nil)
+}
+
+// LLDBAttachWithConfig starts an instance of lldb-server with the supplied config.
+func LLDBAttachWithConfig(pid int, path string, waitFor *proc.WaitFor, debugInfoDirs []string, cfg *ProcessConfig) (*proc.TargetGroup, error) {
+	conf := normalizeProcessConfig(cfg)
+	logcfg := conf.Log
+	logger := logcfg.gdbWireLogger()
 	if runtime.GOOS == "windows" {
 		return nil, ErrUnsupportedOS
 	}
@@ -632,10 +654,13 @@ func LLDBAttach(pid int, path string, waitFor *proc.WaitFor, debugInfoDirs []str
 			args = append(args, "--attach="+strconv.Itoa(pid))
 		}
 
+		if logcfg.LLDBServerOutput {
+			args = append(args, "-g", "-l", "stdout")
+		}
 		if canUnmaskSignals(debugserverExecutable) {
 			args = append(args, "--unmask-signals")
 		}
-		process = commandLogger(debugserverExecutable, args...)
+		process = commandLogger(logger, debugserverExecutable, args...)
 	} else {
 		if waitFor.Valid() {
 			return nil, proc.ErrWaitForNotImplemented
@@ -644,18 +669,19 @@ func LLDBAttach(pid int, path string, waitFor *proc.WaitFor, debugInfoDirs []str
 			return nil, &ErrBackendUnavailable{}
 		}
 		port = unusedPort()
-		process = commandLogger("lldb-server", "gdbserver", "--attach", strconv.Itoa(pid), port)
+		process = commandLogger(logger, "lldb-server", "gdbserver", "--attach", strconv.Itoa(pid), port)
 	}
 
-	process.Stdout = os.Stdout
-	process.Stderr = os.Stderr
+	stdout, stderr := logcfg.serverWriters()
+	process.Stdout = stdout
+	process.Stderr = stderr
 	process.SysProcAttr = sysProcAttr(false)
 
 	if err = process.Start(); err != nil {
 		return nil, err
 	}
 
-	p := newProcess(process.Process)
+	p := newProcess(process.Process, logcfg)
 	p.conn.isDebugserver = isDebugserver
 
 	var grp *proc.TargetGroup

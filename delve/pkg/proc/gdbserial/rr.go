@@ -138,6 +138,13 @@ func Record(cmd []string, wd string, quiet bool, stdin string, stdout proc.Outpu
 // Replay starts an instance of rr in replay mode, with the specified trace
 // directory, and connects to it.
 func Replay(tracedir string, quiet, deleteOnDetach bool, debugInfoDirs []string, rrOnProcessPid int, cmdline string) (*proc.TargetGroup, error) {
+	return ReplayWithConfig(tracedir, quiet, deleteOnDetach, debugInfoDirs, rrOnProcessPid, cmdline, nil)
+}
+
+// ReplayWithConfig starts rr in replay mode with the supplied config.
+func ReplayWithConfig(tracedir string, quiet, deleteOnDetach bool, debugInfoDirs []string, rrOnProcessPid int, cmdline string, cfg *ProcessConfig) (*proc.TargetGroup, error) {
+	conf := normalizeProcessConfig(cfg)
+	logcfg := conf.Log
 	if err := checkRRAvailable(); err != nil {
 		return nil, err
 	}
@@ -175,7 +182,7 @@ func Replay(tracedir string, quiet, deleteOnDetach bool, debugInfoDirs []string,
 		return nil, init.err
 	}
 
-	p := newProcess(rrcmd.Process)
+	p := newProcess(rrcmd.Process, logcfg)
 	p.tracedir = tracedir
 	p.conn.useXcmd = true // 'rr' does not support the 'M' command which is what we would usually use to write memory, this is only important during function calls, in any other situation writing memory will fail anyway.
 	p.conn.newRRCmdStyle = rrVersion.AfterOrEqual(goversion.GoVersion{Major: 5, Minor: 8, Rev: 0})
@@ -312,11 +319,16 @@ func rrParseGdbCommand(line string) rrInit {
 
 // RecordAndReplay acts like calling Record and then Replay.
 func RecordAndReplay(cmd []string, wd string, quiet bool, rrCleanup bool, debugInfoDirs []string, stdin string, stdout proc.OutputRedirect, stderr proc.OutputRedirect) (*proc.TargetGroup, string, error) {
+	return RecordAndReplayWithConfig(cmd, wd, quiet, rrCleanup, debugInfoDirs, stdin, stdout, stderr, nil)
+}
+
+// RecordAndReplayWithConfig acts like calling Record and then Replay with the supplied config.
+func RecordAndReplayWithConfig(cmd []string, wd string, quiet bool, rrCleanup bool, debugInfoDirs []string, stdin string, stdout proc.OutputRedirect, stderr proc.OutputRedirect, cfg *ProcessConfig) (*proc.TargetGroup, string, error) {
 	tracedir, err := Record(cmd, wd, quiet, stdin, stdout, stderr)
 	if tracedir == "" {
 		return nil, "", err
 	}
-	t, err := Replay(tracedir, quiet, rrCleanup, debugInfoDirs, 0, strings.Join(cmd, " "))
+	t, err := ReplayWithConfig(tracedir, quiet, rrCleanup, debugInfoDirs, 0, strings.Join(cmd, " "), cfg)
 	return t, tracedir, err
 }
 

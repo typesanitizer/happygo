@@ -50,7 +50,8 @@ type gdbConn struct {
 	useXcmd       bool // forces writeMemory to use the 'X' command
 	newRRCmdStyle bool // forces qRRCmd to use the post-5.8.0 style always
 
-	log logflags.Logger
+	log        logflags.Logger
+	logEnabled bool
 }
 
 var ErrTooManyAttempts = errors.New("too many transmit attempts")
@@ -771,7 +772,7 @@ func (conn *gdbConn) parseStopPacket(resp []byte, threadID string, tu *threadUpd
 		sp.watchReg = -1
 		sp.regs = make(map[uint64]uint64)
 
-		if logflags.GdbWire() && gdbWireFullStopPacket {
+		if conn.logEnabled && gdbWireFullStopPacket {
 			conn.log.Debugf("full stop packet: %s", string(resp))
 		}
 
@@ -1340,7 +1341,7 @@ func (conn *gdbConn) send(cmd []byte) error {
 
 	attempt := 0
 	for {
-		if logflags.GdbWire() {
+		if conn.logEnabled {
 			if len(cmd) > gdbWireMaxLen {
 				conn.log.Debugf("<- %s...", string(cmd[:gdbWireMaxLen]))
 			} else {
@@ -1381,7 +1382,7 @@ func (conn *gdbConn) recv(cmd []byte, context string, binary bool) (resp []byte,
 		if err != nil {
 			return nil, err
 		}
-		if logflags.GdbWire() {
+		if conn.logEnabled {
 			out := resp
 			partial := false
 			if !binary {
