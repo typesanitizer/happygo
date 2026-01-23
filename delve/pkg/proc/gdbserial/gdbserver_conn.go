@@ -50,10 +50,13 @@ type gdbConn struct {
 	useXcmd       bool // forces writeMemory to use the 'X' command
 	newRRCmdStyle bool // forces qRRCmd to use the post-5.8.0 style always
 
-	log logflags.Logger
+	log        logflags.Logger
+	logEnabled bool
 }
 
 var ErrTooManyAttempts = errors.New("too many transmit attempts")
+
+const debugserverRegisterReadTimeout = 2 * time.Second
 
 // GdbProtocolError is an error response (Exx) of Gdb Remote Serial Protocol
 // or an "unsupported command" response (empty packet).
@@ -521,6 +524,10 @@ func (conn *gdbConn) writeRegisters(threadID string, data []byte) error {
 
 // readRegister executes 'p' (read register) command.
 func (conn *gdbConn) readRegister(threadID string, regnum int, data []byte) error {
+	if conn.isDebugserver && conn.conn != nil {
+		_ = conn.conn.SetReadDeadline(time.Now().Add(debugserverRegisterReadTimeout))
+		defer conn.conn.SetReadDeadline(time.Time{})
+	}
 	if !conn.threadSuffixSupported {
 		if err := conn.selectThread('g', threadID, "registers write"); err != nil {
 			return err
@@ -771,7 +778,7 @@ func (conn *gdbConn) parseStopPacket(resp []byte, threadID string, tu *threadUpd
 		sp.watchReg = -1
 		sp.regs = make(map[uint64]uint64)
 
-		if logflags.GdbWire() && gdbWireFullStopPacket {
+		if conn.logEnabled && gdbWireFullStopPacket {
 			conn.log.Debugf("full stop packet: %s", string(resp))
 		}
 
@@ -1340,7 +1347,7 @@ func (conn *gdbConn) send(cmd []byte) error {
 
 	attempt := 0
 	for {
-		if logflags.GdbWire() {
+		if conn.logEnabled {
 			if len(cmd) > gdbWireMaxLen {
 				conn.log.Debugf("<- %s...", string(cmd[:gdbWireMaxLen]))
 			} else {
@@ -1381,7 +1388,7 @@ func (conn *gdbConn) recv(cmd []byte, context string, binary bool) (resp []byte,
 		if err != nil {
 			return nil, err
 		}
-		if logflags.GdbWire() {
+		if conn.logEnabled {
 			out := resp
 			partial := false
 			if !binary {

@@ -63,6 +63,126 @@ func TestMain(m *testing.M) {
 	protest.RunTestsWithFixtures(m)
 }
 
+const gdbserialTestLogDirEnv = "DELVE_TEST_LOG_DIR"
+
+type gdbserialTestLogConfig struct {
+	cfg           *gdbserial.ProcessConfig
+	gdbPath       string
+	serverPath    string
+	lifecyclePath string
+	gdbFile       *os.File
+	serverFile    *os.File
+	lifecycleFile *os.File
+}
+
+var (
+	gdbserialTestLogsMu sync.Mutex
+	gdbserialTestLogs   = map[string]*gdbserialTestLogConfig{}
+)
+
+func gdbserialTestConfig(t testing.TB) *gdbserial.ProcessConfig {
+	t.Helper()
+	if runtime.GOOS != "darwin" {
+		return nil
+	}
+	logDir := os.Getenv(gdbserialTestLogDirEnv)
+	if logDir == "" {
+		return nil
+	}
+
+	testName := t.Name()
+
+	gdbserialTestLogsMu.Lock()
+	defer gdbserialTestLogsMu.Unlock()
+	if existing := gdbserialTestLogs[testName]; existing != nil {
+		return existing.cfg
+	}
+
+	if err := os.MkdirAll(logDir, 0o755); err != nil {
+		t.Fatalf("failed to create test log dir %q: %v", logDir, err)
+	}
+
+	prefix := filepath.Base(os.Args[0])
+	prefix = strings.TrimSuffix(prefix, ".test.exe")
+	prefix = strings.TrimSuffix(prefix, ".test")
+	sanitized := sanitizeTestName(testName)
+	gdbPath := filepath.Join(logDir, fmt.Sprintf("%s-%s-gdbwire.log", prefix, sanitized))
+	serverPath := filepath.Join(logDir, fmt.Sprintf("%s-%s-lldbserver.log", prefix, sanitized))
+	lifecyclePath := filepath.Join(logDir, fmt.Sprintf("%s-%s-proc.log", prefix, sanitized))
+
+	gdbFile, err := os.Create(gdbPath)
+	if err != nil {
+		t.Fatalf("failed to create gdb wire log file %q: %v", gdbPath, err)
+	}
+	serverFile, err := os.Create(serverPath)
+	if err != nil {
+		_ = gdbFile.Close()
+		t.Fatalf("failed to create lldbserver log file %q: %v", serverPath, err)
+	}
+	lifecycleFile, err := os.Create(lifecyclePath)
+	if err != nil {
+		_ = gdbFile.Close()
+		_ = serverFile.Close()
+		t.Fatalf("failed to create proc lifecycle log file %q: %v", lifecyclePath, err)
+	}
+
+	cfg := &gdbserial.ProcessConfig{
+		Log: gdbserial.LogConfig{
+			GdbWire:             true,
+			GdbWireOut:          gdbFile,
+			LLDBServerOutput:    true,
+			LLDBServerOut:       serverFile,
+			LLDBServerErr:       serverFile,
+			ProcessLifecycle:    true,
+			ProcessLifecycleOut: lifecycleFile,
+		},
+	}
+
+	entry := &gdbserialTestLogConfig{
+		cfg:           cfg,
+		gdbPath:       gdbPath,
+		serverPath:    serverPath,
+		lifecyclePath: lifecyclePath,
+		gdbFile:       gdbFile,
+		serverFile:    serverFile,
+		lifecycleFile: lifecycleFile,
+	}
+	gdbserialTestLogs[testName] = entry
+
+	t.Cleanup(func() {
+		_ = entry.gdbFile.Close()
+		_ = entry.serverFile.Close()
+		_ = entry.lifecycleFile.Close()
+		if t.Failed() {
+			t.Logf("gdb wire log: %s", entry.gdbPath)
+			t.Logf("lldbserver log: %s", entry.serverPath)
+			t.Logf("proc lifecycle log: %s", entry.lifecyclePath)
+		}
+
+		gdbserialTestLogsMu.Lock()
+		delete(gdbserialTestLogs, testName)
+		gdbserialTestLogsMu.Unlock()
+	})
+
+	return cfg
+}
+
+func sanitizeTestName(name string) string {
+	var b strings.Builder
+	b.Grow(len(name))
+	for _, r := range name {
+		if (r >= 'a' && r <= 'z') ||
+			(r >= 'A' && r <= 'Z') ||
+			(r >= '0' && r <= '9') ||
+			r == '.' || r == '-' || r == '_' {
+			b.WriteRune(r)
+			continue
+		}
+		b.WriteByte('_')
+	}
+	return b.String()
+}
+
 func matchSkipConditions(conditions ...string) bool {
 	for _, cond := range conditions {
 		if !slices.Contains([]string{runtime.GOOS, runtime.GOARCH, testBackend, buildMode}, cond) {
@@ -113,11 +233,11 @@ func startTestProcessArgs(fixture protest.Fixture, t testing.TB, wd string, args
 	case "native":
 		grp, err = native.Launch(append([]string{fixture.Path}, args...), wd, 0, []string{}, "", "", proc.OutputRedirect{}, proc.OutputRedirect{})
 	case "lldb":
-		grp, err = gdbserial.LLDBLaunch(append([]string{fixture.Path}, args...), wd, 0, []string{}, "", [3]string{})
+		grp, err = gdbserial.LLDBLaunchWithConfig(append([]string{fixture.Path}, args...), wd, 0, []string{}, "", [3]string{}, gdbserialTestConfig(t))
 	case "rr":
 		protest.MustHaveRecordingAllowed(t)
 		t.Log("recording")
-		grp, tracedir, err = gdbserial.RecordAndReplay(append([]string{fixture.Path}, args...), wd, true, true, []string{}, "", proc.OutputRedirect{}, proc.OutputRedirect{})
+		grp, tracedir, err = gdbserial.RecordAndReplayWithConfig(append([]string{fixture.Path}, args...), wd, true, true, []string{}, "", proc.OutputRedirect{}, proc.OutputRedirect{}, gdbserialTestConfig(t))
 		t.Logf("replaying %q", tracedir)
 	default:
 		t.Fatal("unknown backend")
@@ -2053,7 +2173,7 @@ func TestUnsupportedArch(t *testing.T) {
 	case "native":
 		p, err = native.Launch([]string{outfile}, ".", 0, []string{}, "", "", proc.OutputRedirect{}, proc.OutputRedirect{})
 	case "lldb":
-		p, err = gdbserial.LLDBLaunch([]string{outfile}, ".", 0, []string{}, "", [3]string{})
+		p, err = gdbserial.LLDBLaunchWithConfig([]string{outfile}, ".", 0, []string{}, "", [3]string{}, gdbserialTestConfig(t))
 	default:
 		t.Skip("test not valid for this backend")
 	}
@@ -2620,7 +2740,7 @@ func TestAttachDetach(t *testing.T) {
 		if runtime.GOOS == "darwin" {
 			path = fixture.Path
 		}
-		p, err = gdbserial.LLDBAttach(cmd.Process.Pid, path, nil, []string{})
+		p, err = gdbserial.LLDBAttachWithConfig(cmd.Process.Pid, path, nil, []string{}, gdbserialTestConfig(t))
 	default:
 		err = fmt.Errorf("unknown backend %q", testBackend)
 	}
@@ -5679,7 +5799,7 @@ func TestWaitForAttach(t *testing.T) {
 		if runtime.GOOS == "darwin" {
 			path = waitFor.Name
 		}
-		p, err = gdbserial.LLDBAttach(0, path, waitFor, []string{})
+		p, err = gdbserial.LLDBAttachWithConfig(0, path, waitFor, []string{}, gdbserialTestConfig(t))
 	default:
 		err = fmt.Errorf("unknown backend %q", testBackend)
 	}
