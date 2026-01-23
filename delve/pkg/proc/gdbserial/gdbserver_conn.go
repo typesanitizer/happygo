@@ -56,6 +56,8 @@ type gdbConn struct {
 
 var ErrTooManyAttempts = errors.New("too many transmit attempts")
 
+const debugserverRegisterReadTimeout = 2 * time.Second
+
 // GdbProtocolError is an error response (Exx) of Gdb Remote Serial Protocol
 // or an "unsupported command" response (empty packet).
 type GdbProtocolError struct {
@@ -522,6 +524,10 @@ func (conn *gdbConn) writeRegisters(threadID string, data []byte) error {
 
 // readRegister executes 'p' (read register) command.
 func (conn *gdbConn) readRegister(threadID string, regnum int, data []byte) error {
+	if conn.isDebugserver && conn.conn != nil {
+		_ = conn.conn.SetReadDeadline(time.Now().Add(debugserverRegisterReadTimeout))
+		defer conn.conn.SetReadDeadline(time.Time{})
+	}
 	if !conn.threadSuffixSupported {
 		if err := conn.selectThread('g', threadID, "registers write"); err != nil {
 			return err
