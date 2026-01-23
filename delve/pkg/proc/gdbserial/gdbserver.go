@@ -146,6 +146,9 @@ type gdbProcess struct {
 	regnames *gdbRegnames
 	conn     gdbConn
 
+	procLog        logflags.Logger
+	procLogEnabled bool
+
 	threads       map[int]*gdbThread
 	currentThread *gdbThread
 
@@ -171,6 +174,13 @@ type gdbProcess struct {
 }
 
 var _ proc.RecordingManipulationInternal = &gdbProcess{}
+
+func (p *gdbProcess) logProcessf(format string, args ...interface{}) {
+	if !p.procLogEnabled {
+		return
+	}
+	p.procLog.Debugf(format, args...)
+}
 
 // gdbThread represents an operating system thread.
 type gdbThread struct {
@@ -227,6 +237,7 @@ type gdbRegnames struct {
 // Use Listen, Dial or Connect to complete connection.
 func newProcess(process *os.Process, logcfg LogConfig) *gdbProcess {
 	logger := logcfg.gdbWireLogger()
+	procLogger := logcfg.processLifecycleLogger()
 	p := &gdbProcess{
 		conn: gdbConn{
 			maxTransmitAttempts: maxTransmitAttempts,
@@ -237,6 +248,8 @@ func newProcess(process *os.Process, logcfg LogConfig) *gdbProcess {
 			goarch:              runtime.GOARCH,
 			goos:                runtime.GOOS,
 		},
+		procLog:        procLogger,
+		procLogEnabled: logcfg.processLifecycleEnabled(),
 		threads:        make(map[int]*gdbThread),
 		bi:             proc.NewBinaryInfo(runtime.GOOS, runtime.GOARCH),
 		regnames:       new(gdbRegnames),
@@ -271,11 +284,18 @@ func newProcess(process *os.Process, logcfg LogConfig) *gdbProcess {
 	}
 
 	if process != nil {
+		p.logProcessf("newProcess proc=%p pid=%d stub=true", p, process.Pid)
 		p.waitChan = make(chan *os.ProcessState)
+		pid := process.Pid
 		go func() {
-			state, _ := process.Wait()
+			state, err := process.Wait()
+			p.logProcessf("waiter exit proc=%p pid=%d state=%v err=%v", p, pid, state, err)
+			p.logProcessf("waiter send proc=%p pid=%d", p, pid)
 			p.waitChan <- state
+			p.logProcessf("waiter sent proc=%p pid=%d", p, pid)
 		}()
+	} else {
+		p.logProcessf("newProcess proc=%p pid=0 stub=false", p)
 	}
 
 	return p
@@ -299,6 +319,11 @@ func (p *gdbProcess) Listen(listener net.Listener, path, cmdline string, pid int
 		return p.Connect(conn, path, cmdline, pid, debugInfoDirs, stopReason)
 	case status := <-p.waitChan:
 		listener.Close()
+		procPid := 0
+		if p.process != nil {
+			procPid = p.process.Pid
+		}
+		p.logProcessf("listen waitChan recv proc=%p pid=%d status=%v", p, procPid, status)
 		if err := checkRosettaExpensive(); err != nil {
 			return nil, err
 		}
@@ -315,6 +340,11 @@ func (p *gdbProcess) Dial(addr string, path, cmdline string, pid int, debugInfoD
 		}
 		select {
 		case status := <-p.waitChan:
+			procPid := 0
+			if p.process != nil {
+				procPid = p.process.Pid
+			}
+			p.logProcessf("dial waitChan recv proc=%p pid=%d status=%v", p, procPid, status)
 			if err := checkRosettaExpensive(); err != nil {
 				return nil, err
 			}
@@ -1104,6 +1134,11 @@ func (p *gdbProcess) getCtrlC(cctx *proc.ContinueOnceContext) bool {
 // The _pid argument is unused as follow exec
 // mode is not implemented with this backend.
 func (p *gdbProcess) Detach(_pid int, kill bool) error {
+	procPid := 0
+	if p.process != nil {
+		procPid = p.process.Pid
+	}
+	p.logProcessf("detach start proc=%p pid=%d kill=%t exited=%t detached=%t", p, procPid, kill, p.exited, p.detached)
 	if kill && !p.exited {
 		err := p.conn.kill()
 		if err != nil {
@@ -1112,18 +1147,23 @@ func (p *gdbProcess) Detach(_pid int, kill bool) error {
 			}
 			p.exited = true
 		}
+		p.logProcessf("detach kill done proc=%p pid=%d exited=%t", p, procPid, p.exited)
 	}
 	if !p.exited {
 		if err := p.conn.detach(); err != nil {
 			return err
 		}
 		p.detached = true
+		p.logProcessf("detach remote done proc=%p pid=%d", p, procPid)
 	}
 	if p.process != nil {
+		p.logProcessf("detach waitChan recv start proc=%p pid=%d", p, procPid)
 		p.process.Kill()
-		<-p.waitChan
+		state := <-p.waitChan
+		p.logProcessf("detach waitChan recv done proc=%p pid=%d state=%v", p, procPid, state)
 		p.process = nil
 	}
+	p.logProcessf("detach complete proc=%p pid=%d", p, procPid)
 	return nil
 }
 

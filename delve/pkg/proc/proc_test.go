@@ -66,11 +66,13 @@ func TestMain(m *testing.M) {
 const gdbserialTestLogDirEnv = "DELVE_TEST_LOG_DIR"
 
 type gdbserialTestLogConfig struct {
-	cfg        *gdbserial.ProcessConfig
-	gdbPath    string
-	serverPath string
-	gdbFile    *os.File
-	serverFile *os.File
+	cfg           *gdbserial.ProcessConfig
+	gdbPath       string
+	serverPath    string
+	lifecyclePath string
+	gdbFile       *os.File
+	serverFile    *os.File
+	lifecycleFile *os.File
 }
 
 var (
@@ -106,6 +108,7 @@ func gdbserialTestConfig(t testing.TB) *gdbserial.ProcessConfig {
 	sanitized := sanitizeTestName(testName)
 	gdbPath := filepath.Join(logDir, fmt.Sprintf("%s-%s-gdbwire.log", prefix, sanitized))
 	serverPath := filepath.Join(logDir, fmt.Sprintf("%s-%s-lldbserver.log", prefix, sanitized))
+	lifecyclePath := filepath.Join(logDir, fmt.Sprintf("%s-%s-proc.log", prefix, sanitized))
 
 	gdbFile, err := os.Create(gdbPath)
 	if err != nil {
@@ -116,35 +119,48 @@ func gdbserialTestConfig(t testing.TB) *gdbserial.ProcessConfig {
 		_ = gdbFile.Close()
 		t.Fatalf("failed to create lldbserver log file %q: %v", serverPath, err)
 	}
+	lifecycleFile, err := os.Create(lifecyclePath)
+	if err != nil {
+		_ = gdbFile.Close()
+		_ = serverFile.Close()
+		t.Fatalf("failed to create proc lifecycle log file %q: %v", lifecyclePath, err)
+	}
 
 	cfg := &gdbserial.ProcessConfig{
 		Log: gdbserial.LogConfig{
-			GdbWire:          true,
-			GdbWireOut:       gdbFile,
-			LLDBServerOutput: true,
-			LLDBServerOut:    serverFile,
-			LLDBServerErr:    serverFile,
+			GdbWire:             true,
+			GdbWireOut:          gdbFile,
+			LLDBServerOutput:    true,
+			LLDBServerOut:       serverFile,
+			LLDBServerErr:       serverFile,
+			ProcessLifecycle:    true,
+			ProcessLifecycleOut: lifecycleFile,
 		},
 	}
 
 	entry := &gdbserialTestLogConfig{
-		cfg:        cfg,
-		gdbPath:    gdbPath,
-		serverPath: serverPath,
-		gdbFile:    gdbFile,
-		serverFile: serverFile,
+		cfg:           cfg,
+		gdbPath:       gdbPath,
+		serverPath:    serverPath,
+		lifecyclePath: lifecyclePath,
+		gdbFile:       gdbFile,
+		serverFile:    serverFile,
+		lifecycleFile: lifecycleFile,
 	}
 	gdbserialTestLogs[testName] = entry
 
 	t.Cleanup(func() {
 		_ = entry.gdbFile.Close()
 		_ = entry.serverFile.Close()
+		_ = entry.lifecycleFile.Close()
 		if !t.Failed() {
 			_ = os.Remove(entry.gdbPath)
 			_ = os.Remove(entry.serverPath)
+			_ = os.Remove(entry.lifecyclePath)
 		} else {
 			t.Logf("gdb wire log: %s", entry.gdbPath)
 			t.Logf("lldbserver log: %s", entry.serverPath)
+			t.Logf("proc lifecycle log: %s", entry.lifecyclePath)
 		}
 
 		gdbserialTestLogsMu.Lock()

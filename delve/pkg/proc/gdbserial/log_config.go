@@ -20,6 +20,11 @@ type LogConfig struct {
 	LLDBServerOut io.Writer
 	// LLDBServerErr is the destination for debugserver stderr when enabled.
 	LLDBServerErr io.Writer
+
+	// ProcessLifecycle enables logging around gdbserial process lifecycle.
+	ProcessLifecycle bool
+	// ProcessLifecycleOut is the destination for lifecycle logs. Nil uses the global log destination.
+	ProcessLifecycleOut io.Writer
 }
 
 // ProcessConfig configures gdbserial process creation.
@@ -31,11 +36,13 @@ type ProcessConfig struct {
 func DefaultProcessConfig() ProcessConfig {
 	return ProcessConfig{
 		Log: LogConfig{
-			GdbWire:          logflags.GdbWire(),
-			LLDBServerOutput: logflags.LLDBServerOutput(),
-			GdbWireOut:       nil,
-			LLDBServerOut:    nil,
-			LLDBServerErr:    nil,
+			GdbWire:             logflags.GdbWire(),
+			LLDBServerOutput:    logflags.LLDBServerOutput(),
+			ProcessLifecycle:    false,
+			GdbWireOut:          nil,
+			LLDBServerOut:       nil,
+			LLDBServerErr:       nil,
+			ProcessLifecycleOut: nil,
 		},
 	}
 }
@@ -53,6 +60,14 @@ func (cfg LogConfig) gdbWireLogger() logflags.Logger {
 
 func (cfg LogConfig) gdbWireEnabled() bool {
 	return cfg.GdbWire
+}
+
+func (cfg LogConfig) processLifecycleLogger() logflags.Logger {
+	return logflags.NewLogger(cfg.ProcessLifecycle, logflags.Fields{"layer": "gdbserial", "kind": "process"}, cfg.ProcessLifecycleOut)
+}
+
+func (cfg LogConfig) processLifecycleEnabled() bool {
+	return cfg.ProcessLifecycle
 }
 
 func (cfg LogConfig) wantsServerOutput() bool {
