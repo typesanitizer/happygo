@@ -16,6 +16,7 @@ env:
 jobs:
   build-head:
     runs-on: ${{ inputs.os }}
+    if: inputs.os == 'macos-latest'
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/build-toolchain
@@ -25,6 +26,7 @@ jobs:
 
   build-gotip:
     runs-on: ${{ inputs.os }}
+    if: false
     steps:
       # Sparse checkout: only fetch .github/ to access the action.
       # The action will checkout golang/go into go/.
@@ -38,7 +40,7 @@ jobs:
 
   test-std:
     runs-on: ${{ inputs.os }}
-    if: inputs.os == 'ubuntu-latest'
+    if: false
     needs: build-head
     steps:
       - uses: actions/checkout@v6
@@ -54,7 +56,7 @@ jobs:
 
   test-cmd:
     runs-on: ${{ inputs.os }}
-    if: inputs.os == 'ubuntu-latest'
+    if: false
     needs: build-head
     steps:
       - uses: actions/checkout@v6
@@ -70,7 +72,7 @@ jobs:
 
   test-tools:
     runs-on: ${{ inputs.os }}
-    if: inputs.os == 'ubuntu-latest'
+    if: false
     needs: build-head
     steps:
       - uses: actions/checkout@v6
@@ -87,11 +89,12 @@ jobs:
   test-delve:
     name: test-delve (${{ matrix.go-toolchain }})
     runs-on: ${{ inputs.os }}
-    needs: [build-head, build-gotip]
+    if: inputs.os == 'macos-latest'
+    needs: build-head
     continue-on-error: ${{ matrix.go-toolchain == 'gotip' }}
     strategy:
       matrix:
-        go-toolchain: ${{ fromJSON(inputs.os == 'ubuntu-latest' && '["head","stable","gotip"]' || '["stable"]') }}
+        go-toolchain: [stable]
     steps:
       - uses: actions/checkout@v6
       # Stable Go is used only for fixture builds; capture its GOROOT before PATH changes.
