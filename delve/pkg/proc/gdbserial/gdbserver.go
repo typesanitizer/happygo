@@ -339,10 +339,6 @@ func (p *gdbProcess) Connect(conn net.Conn, path, cmdline string, pid int, debug
 		conn.Close()
 		return nil, err
 	}
-	if ferr := maybeInjectFault("connect", p); ferr != nil {
-		conn.Close()
-		return nil, ferr
-	}
 
 	if p.conn.isDebugserver {
 		// There are multiple problems with the 'g'/'G' commands on debugserver.
