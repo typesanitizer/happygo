@@ -1,0 +1,96 @@
+name: upstream-sync
+
+on:
+  workflow_dispatch:
+    inputs:
+      project:
+        description: Project to sync
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - go
+          - tools
+          - delve
+      base:
+        description: Branch of happygo repo to sync onto
+        required: true
+        default: main
+        type: string
+      push:
+        # Set to false to dry-run the sync without pushing or creating PRs.
+        description: Push merge-bot/sync/* branches after sync
+        required: true
+        default: true
+        type: boolean
+  schedule:
+    # 16:00 UTC = 17:00 CET (winter) / 18:00 CEST (summer)
+    #        .--- minute (0-59)
+    #        | .--- hour (0-23, UTC)
+    #        | |  .--- day of month (1-31)
+    #        | |  | .--- month (1-12)
+    #        | |  | | .--- day of week (0-6, Sun=0)
+    #        | |  | | |
+    - cron: "0 16 * * *"
+
+# Prevent overlapping syncs from racing on the same merge-bot branches.
+concurrency:
+  group: upstream-sync
+  cancel-in-progress: true
+
+# SYNC(id: gha-permissions)
+permissions:
+  # For git push in sync-branch (see sync_branch.go).
+  contents: write
+  # For gh pr create/edit/merge and gh label create/list in sync-pr (see sync_pr.go).
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # Full history needed for git subtree operations.
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.24.x
+          cache: false
+
+      - name: Configure git identity
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Sync branches and PRs
+        shell: python
+        env:
+          DISPATCH_PROJECT: ${{ github.event.inputs.project }}
+          DISPATCH_BASE: ${{ github.event.inputs.base }}
+          DISPATCH_PUSH: ${{ github.event.inputs.push }}
+        run: |
+          import os
+          import subprocess
+
+          # Defaults for scheduled runs (inputs are empty for cron triggers).
+          # These must match the workflow_dispatch defaults above.
+          project = os.getenv("DISPATCH_PROJECT") or "all"
+          base = os.getenv("DISPATCH_BASE") or "main"
+          push = (os.getenv("DISPATCH_PUSH") or "true").lower() == "true"
+
+          # --persist: skip worktree cleanup since the CI runner is ephemeral.
+          branch_cmd = ["go", "run", "-C", "meta", "./cmd", "sync-branch", "--project", project, "--base", base, "--persist"]
+          if push:
+              branch_cmd.append("--push")
+
+          print(" ".join(branch_cmd))
+          subprocess.run(branch_cmd, check=True)
+
+          if push:
+              pr_cmd = ["go", "run", "-C", "meta", "./cmd", "sync-pr", "--project", project, "--base", base]
+              print(" ".join(pr_cmd))
+              subprocess.run(pr_cmd, check=True)

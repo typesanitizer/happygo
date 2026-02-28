@@ -87,6 +87,68 @@ jobs:
           export PATH="$GOROOT/bin:$PATH"
           go test -C tools ./...
 
+  test-first-party:
+    name: go test (first-party)
+    if: inputs.os == 'ubuntu-latest'
+    runs-on: ${{ inputs.os }}
+    needs: build-head
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-head-toolchain
+        with:
+          os: ${{ inputs.os }}
+      - name: Test
+        shell: python
+        run: |
+          import json
+          import os
+          import subprocess
+
+          workspace = os.environ["GITHUB_WORKSPACE"]
+          os.environ["GOROOT"] = os.path.join(workspace, "go")
+          os.environ["PATH"] = os.path.join(os.environ["GOROOT"], "bin") + os.pathsep + os.environ["PATH"]
+
+          with open("meta/repo-configuration.json", encoding="utf-8") as f:
+              cfg = json.load(f)
+
+          forked_folders = {entry["folder"] for entry in cfg["forked_folders"]}
+          patterns = []
+          for dir_name in sorted(os.listdir(".")):
+              if not os.path.isfile(os.path.join(dir_name, "go.mod")):
+                  continue
+              # For all the forked folders, we currently have separate
+              # testing steps for effective parallelization. The other code
+              # is fairly small so we test it all in one job.
+              if dir_name in forked_folders:
+                  continue
+              patterns.append(f"./{dir_name}/...")
+
+          if not patterns:
+              raise SystemExit("no first-party go modules found")
+
+          print("go test", *patterns)
+          subprocess.run(["go", "test", *patterns], check=True)
+
+  lint-first-party:
+    name: golangci-lint (common, meta)
+    if: inputs.os == 'ubuntu-latest'
+    runs-on: ${{ inputs.os }}
+    needs: build-head
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-head-toolchain
+        with:
+          os: ${{ inputs.os }}
+      - name: Lint
+        shell: bash
+        run: |
+          export GOROOT="$PWD/go"
+          export PATH="$GOROOT/bin:$PATH"
+          export CGO_ENABLED=0
+          # Version is pinned via the tool dependency in common/go.mod;
+          # see NOTE(id: workspace-tool-directives).
+          go tool golangci-lint run ./common/... ./meta/...
+
   test-delve:
     name: test-delve (${{ matrix.go-toolchain }})
     runs-on: ${{ inputs.os }}

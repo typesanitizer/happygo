@@ -1,6 +1,10 @@
 go 1.25.0
 
+// go/ is excluded: the Go toolchain has its own module structure
+// and is not built via the workspace.
 use (
+	./common
 	./delve
+	./meta
 	./tools
 )
