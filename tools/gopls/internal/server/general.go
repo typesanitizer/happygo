@@ -24,6 +24,7 @@ import (
 	"golang.org/x/tools/gopls/internal/cache"
 	"golang.org/x/tools/gopls/internal/debug"
 	debuglog "golang.org/x/tools/gopls/internal/debug/log"
+	"golang.org/x/tools/gopls/internal/filecache"
 	"golang.org/x/tools/gopls/internal/protocol"
 	"golang.org/x/tools/gopls/internal/protocol/semtok"
 	"golang.org/x/tools/gopls/internal/settings"
@@ -66,6 +67,10 @@ func (s *server) Initialize(ctx context.Context, params *protocol.ParamInitializ
 		s.handleOptionResult(ctx, res, errs)
 	}
 	options.ForClientCapabilities(params.ClientInfo, params.Capabilities)
+
+	if options.MaxFileCacheBytes > 0 {
+		filecache.SetBudget(options.MaxFileCacheBytes)
+	}
 
 	if options.ShowBugReports {
 		// Report the next bug that occurs on the server.
@@ -118,6 +123,18 @@ func (s *server) Initialize(ctx context.Context, params *protocol.ParamInitializ
 		}
 	}
 
+	var semanticTokenProvider any
+	if options.SemanticTokens {
+		semanticTokenProvider = protocol.SemanticTokensOptions{
+			Range: &protocol.Or_SemanticTokensOptions_range{Value: true},
+			Full:  &protocol.Or_SemanticTokensOptions_full{Value: true},
+			Legend: protocol.SemanticTokensLegend{
+				TokenTypes:     moreslices.ConvertStrings[string](semtok.Types),
+				TokenModifiers: moreslices.ConvertStrings[string](semtok.Modifiers),
+			},
+		}
+	}
+
 	versionInfo := debug.VersionInfo()
 
 	goplsVersion, err := json.Marshal(versionInfo)
@@ -151,14 +168,7 @@ func (s *server) Initialize(ctx context.Context, params *protocol.ParamInitializ
 			ReferencesProvider:        &protocol.Or_ServerCapabilities_referencesProvider{Value: true},
 			RenameProvider:            renameOpts,
 			SelectionRangeProvider:    &protocol.Or_ServerCapabilities_selectionRangeProvider{Value: true},
-			SemanticTokensProvider: protocol.SemanticTokensOptions{
-				Range: &protocol.Or_SemanticTokensOptions_range{Value: true},
-				Full:  &protocol.Or_SemanticTokensOptions_full{Value: true},
-				Legend: protocol.SemanticTokensLegend{
-					TokenTypes:     moreslices.ConvertStrings[string](semtok.TokenTypes),
-					TokenModifiers: moreslices.ConvertStrings[string](semtok.TokenModifiers),
-				},
-			},
+			SemanticTokensProvider:    semanticTokenProvider,
 			SignatureHelpProvider: &protocol.SignatureHelpOptions{
 				TriggerCharacters: []string{"(", ","},
 				// Used to update or dismiss signature help when it's already active,
@@ -187,6 +197,20 @@ func (s *server) Initialize(ctx context.Context, params *protocol.ParamInitializ
 						}},
 					},
 				},
+			},
+			Experimental: map[string]any{
+				// interactiveResolveProvider lists the LSP objects that support
+				// an interactive resolution stage. For instance, the presence of
+				// "command" indicates that the server handles "command/resolve"
+				// requests.
+				//
+				// Due to the existence of "codeAction/resolve" and language
+				// clients that resolve code action eagerly, "codeAction" can
+				// never be interactively resolved.
+				//
+				// TODO(hxjiang): experiment with interactively resolving
+				// "RenameParams". See golang/go#69107.
+				"interactiveResolveProvider": []string{"command"},
 			},
 		},
 		ServerInfo: &protocol.ServerInfo{

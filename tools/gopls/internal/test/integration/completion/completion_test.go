@@ -120,7 +120,7 @@ package
 		{
 			name:          "package completion in a comment",
 			filename:      "fruits/testfile.go",
-			triggerRegexp: "th(i)s",
+			triggerRegexp: "th()is",
 			want:          nil,
 		},
 		{
@@ -329,7 +329,7 @@ func main() {
 		// Trigger unimported completions for the maps package.
 		env.OpenFile(filename)
 		env.Await(env.DoneWithOpen())
-		loc := env.RegexpSearch(filename, "\n}")
+		loc := env.RegexpSearch(filename, `()\n\}`)
 		completions := env.Completion(loc)
 		if len(completions.Items) == 0 {
 			t.Fatalf("no completion items")
@@ -382,7 +382,7 @@ func _() {
 		// Trigger unimported completions for the example.com/blah package.
 		env.OpenFile("main.go")
 		env.Await(env.DoneWithOpen())
-		loc := env.RegexpSearch("main.go", "ah")
+		loc := env.RegexpSearch("main.go", "()ah")
 		completions := env.Completion(loc)
 		if len(completions.Items) == 0 {
 			t.Fatalf("no completion items")
@@ -393,7 +393,7 @@ func _() {
 		// Trigger completions once again for the blah.<> selector.
 		env.RegexpReplace("main.go", "_ = blah", "_ = blah.")
 		env.Await(env.DoneWithChange())
-		loc = env.RegexpSearch("main.go", "\n}")
+		loc = env.RegexpSearch("main.go", `()\n\}`)
 		completions = env.Completion(loc)
 		if len(completions.Items) != 1 {
 			t.Fatalf("expected 1 completion item, got %v", len(completions.Items))
@@ -706,20 +706,17 @@ var Lower = ""
 				}
 
 				for _, tc := range testcases {
-					t.Run(fmt.Sprintf("%v/%v", tc.mode, tc.accept), func(t *testing.T) {
-
-						env.SetSuggestionInsertReplaceMode(tc.mode == "replace")
-						env.SetBufferContent("main.go", orig)
-						loc := env.RegexpSearch("main.go", `Lower\)`)
-						completions := env.Completion(loc)
-						item := find(t, completions, tc.accept)
-						env.AcceptCompletion(loc, item)
-						env.Await(env.DoneWithChange())
-						got := env.BufferText("main.go")
-						if !strings.Contains(got, tc.want) {
-							t.Errorf("unexpected state after completion:\n%v\nwanted %v", got, tc.want)
-						}
-					})
+					t.Logf("mode=%q accept=%q", tc.mode, tc.accept)
+					env.SetSuggestionInsertReplaceMode(tc.mode == "replace")
+					env.SetBufferContent("main.go", orig)
+					loc := env.RegexpSearch("main.go", `()Lower\)`)
+					completions := env.Completion(loc)
+					item := find(t, completions, tc.accept)
+					env.AcceptCompletion(loc, item)
+					got := env.BufferText("main.go")
+					if !strings.Contains(got, tc.want) {
+						t.Errorf("unexpected state after completion:\n%v\nwanted %v", got, tc.want)
+					}
 				}
 			})
 		})
@@ -1273,7 +1270,7 @@ func TestReverseInferDoubleTypeParamCompletion(t *testing.T) {
 			}
 		}
 
-		compl = env.RegexpSearch("a.go", `DoubleWrap\[InterfaceA, (_)\]\(\)`)
+		compl = env.RegexpSearch("a.go", `DoubleWrap\[InterfaceA, ()_\]\(\)`)
 		result = env.Completion(compl)
 
 		wantLabel = []string{"InterfaceB", "TypeB", "TypeX", "InterfaceA", "TypeA"}
@@ -1301,8 +1298,8 @@ func TestDoubleParamReturnCompletion(t *testing.T) {
 		env.OpenFile("a.go")
 
 		tests := map[string][]string{
-			`DoubleWrap\[()\]\(\)`:              {"InterfaceA", "TypeA", "InterfaceB", "TypeB", "TypeC"},
-			`DoubleWrap\[InterfaceA, (_)\]\(\)`: {"InterfaceB", "TypeB", "TypeX", "InterfaceA", "TypeA"},
+			`DoubleWrap\[()\]\(\)`:               {"InterfaceA", "TypeA", "InterfaceB", "TypeB", "TypeC"},
+			`DoubleWrap\[InterfaceA, ()\_\]\(\)`: {"InterfaceB", "TypeB", "TypeX", "InterfaceA", "TypeA"},
 		}
 
 		for re, wantLabels := range tests {
@@ -1336,7 +1333,7 @@ func _() {
 
 	Run(t, files, func(t *testing.T, env *Env) {
 		env.OpenFile("a.go")
-		result := env.Completion(env.RegexpSearch("a.go", `// here`))
+		result := env.Completion(env.RegexpSearch("a.go", `()\/\/ here`))
 		builtins := []string{
 			"any", "append", "bool", "byte", "cap", "close",
 			"comparable", "complex", "complex128", "complex64", "copy", "delete",
@@ -1391,7 +1388,7 @@ func _() {
 	foo.Foo()
 }
 `)
-		list := env.Completion(env.RegexpSearch("nodisk/nodisk.go", "foo.(Foo)"))
+		list := env.Completion(env.RegexpSearch("nodisk/nodisk.go", "foo.()Foo"))
 		want := []string{"Foo"}
 		var got []string
 		for _, item := range list.Items {
@@ -1531,7 +1528,7 @@ var _ = blah.
 	})
 }
 
-// show that the efficacy counters get exercised. Fortuntely a small program
+// show that the efficacy counters get exercised. Fortunately a small program
 // exercises them all
 func TestCounters(t *testing.T) {
 	const files = `

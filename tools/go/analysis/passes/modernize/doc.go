@@ -263,10 +263,14 @@ is known at compile time, for example:
 	reflect.TypeOf(uint32(0))        -> reflect.TypeFor[uint32]()
 	reflect.TypeOf((*ast.File)(nil)) -> reflect.TypeFor[*ast.File]()
 
-It also offers a fix to simplify the construction below, which uses
+It also offers a fix to simplify the constructions below, which use
 reflect.TypeOf to return the runtime type for an interface type,
 
 	reflect.TypeOf((*io.Reader)(nil)).Elem()
+
+or:
+
+	reflect.TypeOf([]io.Reader(nil)).Elem()
 
 to:
 
@@ -460,14 +464,15 @@ is replaced by:
 
 This avoids quadratic memory allocation and improves performance.
 
-The analyzer requires that all references to s except the final one
+The analyzer requires that all references to s before the final uses
 are += operations. To avoid warning about trivial cases, at least one
 must appear within a loop. The variable s must be a local
 variable, not a global or parameter.
 
-The sole use of the finished string must be the last reference to the
-variable s. (It may appear within an intervening loop or function literal,
-since even s.String() is called repeatedly, it does not allocate memory.)
+All uses of the finished string must come after the last += operation.
+Each such use will be replaced by a call to strings.Builder's String method.
+(These may appear within an intervening loop or function literal, since even
+if s.String() is called repeatedly, it does not allocate memory.)
 
 Often the addend is a call to fmt.Sprintf, as in this example:
 

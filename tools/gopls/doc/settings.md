@@ -210,8 +210,9 @@ Default: `{"generate":true,"regenerate_cgo":true,"run_govulncheck":true,"tidy":t
 
 **This setting is experimental and may be deleted.**
 
-semanticTokens controls whether the LSP server will send
-semantic tokens to the client.
+semanticTokens determines whether gopls will return a
+SemanticTokensProvider at initialization, or respond
+to request for semantic tokens.
 
 Default: `false`.
 
@@ -623,6 +624,20 @@ dependencies.
 * `"workspace"` matches symbols in workspace packages only.
 
 Default: `"all"`.
+
+<a id='maxFileCacheBytes'></a>
+### `maxFileCacheBytes int64`
+
+**This setting is experimental and may be deleted.**
+
+maxFileCacheBytes sets a soft limit on the file cache size in bytes.
+If zero, the default budget is used.
+
+The cache may temporarily use more than this amount.
+Also, this parameter limits file contents; disk block usage
+as measured by du(1) may be significantly higher.
+
+Default: `0`.
 
 <a id='verboseOutput'></a>
 ### `verboseOutput bool`
