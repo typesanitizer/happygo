@@ -27,23 +27,34 @@ type Server interface {
 	IncomingCalls(context.Context, *CallHierarchyIncomingCallsParams) ([]CallHierarchyIncomingCall, error)
 	// See https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification#callHierarchy_outgoingCalls
 	OutgoingCalls(context.Context, *CallHierarchyOutgoingCallsParams) ([]CallHierarchyOutgoingCall, error)
-	// To support microsoft/language-server-protocol#1164, the language server
-	// need to read the form with client-supplied answers and either returns a
-	// CodeAction with errors in the form surfacing the error to the client, or a
-	// CodeAction with properties the language client is waiting for (e.g. edits,
-	// commands).
-	//
-	// The language client may call "codeAction/resolve" if the language server
-	// returns a CodeAction with errors or try asking the user for completing the
-	// form again.
-	// The language client may call "codeAction/resolve" multiple times with user
-	// filled (re-filled) answers in the form until it obtains a CodeAction with
-	// properties (e.g. edits, commands) it's waiting for.
-	//
 	// See https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification#codeAction_resolve
 	ResolveCodeAction(context.Context, *CodeAction) (*CodeAction, error)
 	// See https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification#codeLens_resolve
 	ResolveCodeLens(context.Context, *CodeLens) (*CodeLens, error)
+	// To support microsoft/language-server-protocol#1164, the language server
+	// need to read the form with client-supplied answers and either returns an
+	// ExecuteCommandParams with errors in the form surfacing the error to the
+	// client, or an ExecuteCommandParams with interactive properties empty (e.g
+	// formFields, formAnswers) and user information integrated in original
+	// properties.
+	//
+	// The language client may call "command/resolve" if the language server
+	// returns an ExecuteCommandParams with errors or try asking the user for
+	// completing the form again.
+	// The language client may call "command/resolve" multiple times with user
+	// filled (re-filled) answers in the form until it obtains an
+	// ExecuteCommandParams with interactive properties empty (e.g. formFields,
+	// formAnswers). by then the original properties contains all information,
+	// the client can call "workspace/executeCommand" with the same param.
+	//
+	// Standard resolution (e.g., "codeAction/resolve") cannot be used here because
+	// it is often triggered eagerly (e.g., for previews), prohibiting interactive
+	// forms. "command/resolve" is introduced to handle the interactive flow
+	// strictly *after* the user has explicitly indicated intention (e.g., by
+	// clicking), making it safe for Code Actions and other refactorings.
+	//
+	// Note: This is a non-standard protocol extension.
+	ResolveCommand(context.Context, *ExecuteCommandParams) (*ExecuteCommandParams, error)
 	// See https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification#completionItem_resolve
 	ResolveCompletionItem(context.Context, *CompletionItem) (*CompletionItem, error)
 	// See https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification#documentLink_resolve
@@ -257,6 +268,17 @@ func ServerDispatchCall(ctx context.Context, server Server, method string, raw j
 		}
 		return resp, true, nil
 
+	case "command/resolve":
+		var params ExecuteCommandParams
+		if err := UnmarshalJSON(raw, &params); err != nil {
+			return nil, true, fmt.Errorf("%w: %s", jsonrpc2.ErrParse, err)
+		}
+		resp, err := server.ResolveCommand(ctx, &params)
+		if err != nil {
+			return nil, true, err
+		}
+		return resp, true, nil
+
 	case "completionItem/resolve":
 		var params CompletionItem
 		if err := UnmarshalJSON(raw, &params); err != nil {
@@ -387,7 +409,12 @@ func ServerDispatchCall(ctx context.Context, server Server, method string, raw j
 		if err := UnmarshalJSON(raw, &params); err != nil {
 			return nil, true, fmt.Errorf("%w: %s", jsonrpc2.ErrParse, err)
 		}
-		if !params.Range.Empty() && !params.Range.Contains(params.Position) {
+		if params.Range == (Range{}) {
+			params.Range = Range{
+				Start: params.Position,
+				End:   params.Position,
+			}
+		} else if !params.Range.Contains(params.Position) {
 			return nil, true, fmt.Errorf("position %v is outside the provided range %v.", params.Position, params.Range)
 		}
 		resp, err := server.Completion(ctx, &params)
@@ -401,7 +428,12 @@ func ServerDispatchCall(ctx context.Context, server Server, method string, raw j
 		if err := UnmarshalJSON(raw, &params); err != nil {
 			return nil, true, fmt.Errorf("%w: %s", jsonrpc2.ErrParse, err)
 		}
-		if !params.Range.Empty() && !params.Range.Contains(params.Position) {
+		if params.Range == (Range{}) {
+			params.Range = Range{
+				Start: params.Position,
+				End:   params.Position,
+			}
+		} else if !params.Range.Contains(params.Position) {
 			return nil, true, fmt.Errorf("position %v is outside the provided range %v.", params.Position, params.Range)
 		}
 		resp, err := server.Declaration(ctx, &params)
@@ -415,7 +447,12 @@ func ServerDispatchCall(ctx context.Context, server Server, method string, raw j
 		if err := UnmarshalJSON(raw, &params); err != nil {
 			return nil, true, fmt.Errorf("%w: %s", jsonrpc2.ErrParse, err)
 		}
-		if !params.Range.Empty() && !params.Range.Contains(params.Position) {
+		if params.Range == (Range{}) {
+			params.Range = Range{
+				Start: params.Position,
+				End:   params.Position,
+			}
+		} else if !params.Range.Contains(params.Position) {
 			return nil, true, fmt.Errorf("position %v is outside the provided range %v.", params.Position, params.Range)
 		}
 		resp, err := server.Definition(ctx, &params)
@@ -483,7 +520,12 @@ func ServerDispatchCall(ctx context.Context, server Server, method string, raw j
 		if err := UnmarshalJSON(raw, &params); err != nil {
 			return nil, true, fmt.Errorf("%w: %s", jsonrpc2.ErrParse, err)
 		}
-		if !params.Range.Empty() && !params.Range.Contains(params.Position) {
+		if params.Range == (Range{}) {
+			params.Range = Range{
+				Start: params.Position,
+				End:   params.Position,
+			}
+		} else if !params.Range.Contains(params.Position) {
 			return nil, true, fmt.Errorf("position %v is outside the provided range %v.", params.Position, params.Range)
 		}
 		resp, err := server.DocumentHighlight(ctx, &params)
@@ -541,7 +583,12 @@ func ServerDispatchCall(ctx context.Context, server Server, method string, raw j
 		if err := UnmarshalJSON(raw, &params); err != nil {
 			return nil, true, fmt.Errorf("%w: %s", jsonrpc2.ErrParse, err)
 		}
-		if !params.Range.Empty() && !params.Range.Contains(params.Position) {
+		if params.Range == (Range{}) {
+			params.Range = Range{
+				Start: params.Position,
+				End:   params.Position,
+			}
+		} else if !params.Range.Contains(params.Position) {
 			return nil, true, fmt.Errorf("position %v is outside the provided range %v.", params.Position, params.Range)
 		}
 		resp, err := server.Hover(ctx, &params)
@@ -555,7 +602,12 @@ func ServerDispatchCall(ctx context.Context, server Server, method string, raw j
 		if err := UnmarshalJSON(raw, &params); err != nil {
 			return nil, true, fmt.Errorf("%w: %s", jsonrpc2.ErrParse, err)
 		}
-		if !params.Range.Empty() && !params.Range.Contains(params.Position) {
+		if params.Range == (Range{}) {
+			params.Range = Range{
+				Start: params.Position,
+				End:   params.Position,
+			}
+		} else if !params.Range.Contains(params.Position) {
 			return nil, true, fmt.Errorf("position %v is outside the provided range %v.", params.Position, params.Range)
 		}
 		resp, err := server.Implementation(ctx, &params)
@@ -580,7 +632,12 @@ func ServerDispatchCall(ctx context.Context, server Server, method string, raw j
 		if err := UnmarshalJSON(raw, &params); err != nil {
 			return nil, true, fmt.Errorf("%w: %s", jsonrpc2.ErrParse, err)
 		}
-		if !params.Range.Empty() && !params.Range.Contains(params.Position) {
+		if params.Range == (Range{}) {
+			params.Range = Range{
+				Start: params.Position,
+				End:   params.Position,
+			}
+		} else if !params.Range.Contains(params.Position) {
 			return nil, true, fmt.Errorf("position %v is outside the provided range %v.", params.Position, params.Range)
 		}
 		resp, err := server.InlineCompletion(ctx, &params)
@@ -605,7 +662,12 @@ func ServerDispatchCall(ctx context.Context, server Server, method string, raw j
 		if err := UnmarshalJSON(raw, &params); err != nil {
 			return nil, true, fmt.Errorf("%w: %s", jsonrpc2.ErrParse, err)
 		}
-		if !params.Range.Empty() && !params.Range.Contains(params.Position) {
+		if params.Range == (Range{}) {
+			params.Range = Range{
+				Start: params.Position,
+				End:   params.Position,
+			}
+		} else if !params.Range.Contains(params.Position) {
 			return nil, true, fmt.Errorf("position %v is outside the provided range %v.", params.Position, params.Range)
 		}
 		resp, err := server.LinkedEditingRange(ctx, &params)
@@ -619,7 +681,12 @@ func ServerDispatchCall(ctx context.Context, server Server, method string, raw j
 		if err := UnmarshalJSON(raw, &params); err != nil {
 			return nil, true, fmt.Errorf("%w: %s", jsonrpc2.ErrParse, err)
 		}
-		if !params.Range.Empty() && !params.Range.Contains(params.Position) {
+		if params.Range == (Range{}) {
+			params.Range = Range{
+				Start: params.Position,
+				End:   params.Position,
+			}
+		} else if !params.Range.Contains(params.Position) {
 			return nil, true, fmt.Errorf("position %v is outside the provided range %v.", params.Position, params.Range)
 		}
 		resp, err := server.Moniker(ctx, &params)
@@ -644,7 +711,12 @@ func ServerDispatchCall(ctx context.Context, server Server, method string, raw j
 		if err := UnmarshalJSON(raw, &params); err != nil {
 			return nil, true, fmt.Errorf("%w: %s", jsonrpc2.ErrParse, err)
 		}
-		if !params.Range.Empty() && !params.Range.Contains(params.Position) {
+		if params.Range == (Range{}) {
+			params.Range = Range{
+				Start: params.Position,
+				End:   params.Position,
+			}
+		} else if !params.Range.Contains(params.Position) {
 			return nil, true, fmt.Errorf("position %v is outside the provided range %v.", params.Position, params.Range)
 		}
 		resp, err := server.PrepareCallHierarchy(ctx, &params)
@@ -658,7 +730,12 @@ func ServerDispatchCall(ctx context.Context, server Server, method string, raw j
 		if err := UnmarshalJSON(raw, &params); err != nil {
 			return nil, true, fmt.Errorf("%w: %s", jsonrpc2.ErrParse, err)
 		}
-		if !params.Range.Empty() && !params.Range.Contains(params.Position) {
+		if params.Range == (Range{}) {
+			params.Range = Range{
+				Start: params.Position,
+				End:   params.Position,
+			}
+		} else if !params.Range.Contains(params.Position) {
 			return nil, true, fmt.Errorf("position %v is outside the provided range %v.", params.Position, params.Range)
 		}
 		resp, err := server.PrepareRename(ctx, &params)
@@ -672,7 +749,12 @@ func ServerDispatchCall(ctx context.Context, server Server, method string, raw j
 		if err := UnmarshalJSON(raw, &params); err != nil {
 			return nil, true, fmt.Errorf("%w: %s", jsonrpc2.ErrParse, err)
 		}
-		if !params.Range.Empty() && !params.Range.Contains(params.Position) {
+		if params.Range == (Range{}) {
+			params.Range = Range{
+				Start: params.Position,
+				End:   params.Position,
+			}
+		} else if !params.Range.Contains(params.Position) {
 			return nil, true, fmt.Errorf("position %v is outside the provided range %v.", params.Position, params.Range)
 		}
 		resp, err := server.PrepareTypeHierarchy(ctx, &params)
@@ -708,7 +790,12 @@ func ServerDispatchCall(ctx context.Context, server Server, method string, raw j
 		if err := UnmarshalJSON(raw, &params); err != nil {
 			return nil, true, fmt.Errorf("%w: %s", jsonrpc2.ErrParse, err)
 		}
-		if !params.Range.Empty() && !params.Range.Contains(params.Position) {
+		if params.Range == (Range{}) {
+			params.Range = Range{
+				Start: params.Position,
+				End:   params.Position,
+			}
+		} else if !params.Range.Contains(params.Position) {
 			return nil, true, fmt.Errorf("position %v is outside the provided range %v.", params.Position, params.Range)
 		}
 		resp, err := server.References(ctx, &params)
@@ -722,7 +809,12 @@ func ServerDispatchCall(ctx context.Context, server Server, method string, raw j
 		if err := UnmarshalJSON(raw, &params); err != nil {
 			return nil, true, fmt.Errorf("%w: %s", jsonrpc2.ErrParse, err)
 		}
-		if !params.Range.Empty() && !params.Range.Contains(params.Position) {
+		if params.Range == (Range{}) {
+			params.Range = Range{
+				Start: params.Position,
+				End:   params.Position,
+			}
+		} else if !params.Range.Contains(params.Position) {
 			return nil, true, fmt.Errorf("position %v is outside the provided range %v.", params.Position, params.Range)
 		}
 		resp, err := server.Rename(ctx, &params)
@@ -780,7 +872,12 @@ func ServerDispatchCall(ctx context.Context, server Server, method string, raw j
 		if err := UnmarshalJSON(raw, &params); err != nil {
 			return nil, true, fmt.Errorf("%w: %s", jsonrpc2.ErrParse, err)
 		}
-		if !params.Range.Empty() && !params.Range.Contains(params.Position) {
+		if params.Range == (Range{}) {
+			params.Range = Range{
+				Start: params.Position,
+				End:   params.Position,
+			}
+		} else if !params.Range.Contains(params.Position) {
 			return nil, true, fmt.Errorf("position %v is outside the provided range %v.", params.Position, params.Range)
 		}
 		resp, err := server.SignatureHelp(ctx, &params)
@@ -794,7 +891,12 @@ func ServerDispatchCall(ctx context.Context, server Server, method string, raw j
 		if err := UnmarshalJSON(raw, &params); err != nil {
 			return nil, true, fmt.Errorf("%w: %s", jsonrpc2.ErrParse, err)
 		}
-		if !params.Range.Empty() && !params.Range.Contains(params.Position) {
+		if params.Range == (Range{}) {
+			params.Range = Range{
+				Start: params.Position,
+				End:   params.Position,
+			}
+		} else if !params.Range.Contains(params.Position) {
 			return nil, true, fmt.Errorf("position %v is outside the provided range %v.", params.Position, params.Range)
 		}
 		resp, err := server.TypeDefinition(ctx, &params)
@@ -1023,6 +1125,13 @@ func (s *serverDispatcher) ResolveCodeAction(ctx context.Context, params *CodeAc
 func (s *serverDispatcher) ResolveCodeLens(ctx context.Context, params *CodeLens) (*CodeLens, error) {
 	var result *CodeLens
 	if err := s.sender.Call(ctx, "codeLens/resolve", params, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func (s *serverDispatcher) ResolveCommand(ctx context.Context, params *ExecuteCommandParams) (*ExecuteCommandParams, error) {
+	var result *ExecuteCommandParams
+	if err := s.sender.Call(ctx, "command/resolve", params, &result); err != nil {
 		return nil, err
 	}
 	return result, nil

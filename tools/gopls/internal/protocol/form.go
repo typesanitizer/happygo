@@ -17,6 +17,19 @@ type FormFieldTypeString struct {
 	Kind string `json:"kind"`
 }
 
+// FormFieldTypeDocumentURI defines an input for a file or directory URI.
+//
+// The client determines the best mechanism to collect this information from
+// the user (e.g., a graphical file picker, a text input with autocomplete, etc).
+//
+// The value returned by the client must be a valid "DocumentUri" as defined
+// in the LSP specification:
+// https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#documentUri
+type FormFieldTypeDocumentURI struct {
+	// Kind must be "documentURI".
+	Kind string `json:"kind"`
+}
+
 // FormFieldTypeBool defines a boolean input.
 type FormFieldTypeBool struct {
 	// Kind must be "bool".
@@ -85,4 +98,36 @@ type FormField struct {
 	// Error provides a validation message from the language server.
 	// If empty, the current answer is considered valid.
 	Error string `json:"error,omitempty"`
+}
+
+// InteractiveParams allow the server and client to exchange interactive
+// questions and answers during an LSP request.
+//
+// The server populates FormFields to define the schema. The server may
+// optionally populate FormAnswers to preserve previous user input; if
+// provided, the client may present these as default values.
+//
+// When the client responds, it must provide FormAnswers. The client is not
+// required to send FormFields back to the server.
+type InteractiveParams struct {
+	// FormFields defines the questions and validation errors in previous
+	// answers to the same questions.
+	//
+	// This is a server-to-client field. The language server defines these, and
+	// the client uses them to render the form.
+	//
+	// Note: This is a non-standard protocol extension. See microsoft/language-server-protocol#1164.
+	FormFields []FormField `json:"formFields,omitempty"`
+
+	// FormAnswers contains the values for the form questions.
+	//
+	// When sent by the language server, this field is optional but recommended
+	// to support editing previous values.
+	//
+	// When sent by the language client, this field is required. The slice must
+	// have the same length as FormFields (one answer per question), where the
+	// answer at index i corresponds to the field at index i.
+	//
+	// Note: This is a non-standard protocol extension. See microsoft/language-server-protocol#1164.
+	FormAnswers []any `json:"formAnswers,omitempty"`
 }

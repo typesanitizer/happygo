@@ -32,6 +32,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"golang.org/x/tools/gopls/internal/cache"
 	"golang.org/x/tools/gopls/internal/debug"
 	"golang.org/x/tools/gopls/internal/lsprpc"
@@ -43,11 +44,9 @@ import (
 	"golang.org/x/tools/gopls/internal/util/bug"
 	"golang.org/x/tools/gopls/internal/util/safetoken"
 	"golang.org/x/tools/internal/diff"
-	"golang.org/x/tools/internal/diff/myers"
 	"golang.org/x/tools/internal/expect"
 	"golang.org/x/tools/internal/jsonrpc2"
 	"golang.org/x/tools/internal/jsonrpc2/servertest"
-	"golang.org/x/tools/internal/mcp"
 	"golang.org/x/tools/internal/testenv"
 	"golang.org/x/tools/txtar"
 )
@@ -323,7 +322,13 @@ func Test(t *testing.T) {
 				// report duplicate mismatches of golden data.
 				// Otherwise, verify that formatted content matches.
 				if diff := compare.NamedText("formatted", "on-disk", string(formatted), string(test.content)); diff != "" {
-					t.Errorf("formatted test does not match on-disk content:\n%s", diff)
+					// at this point, the txtar file created by the test and the expected txtar file on the
+					// disk differ. The differences are irrelevant if they are only the contents
+					// of files from a unified diff. These files are dependent on which diff algorithm was used,
+					// so instead checkDiffs has already checked that they correctly express the difference between
+					// the test input and the test output. (If the test code uses the diff that created them, then
+					// they would not differ, but that diff algorithms has been replaced.)
+					checkDifferences(t, test.content, formatted)
 				}
 			}
 		})
@@ -331,6 +336,29 @@ func Test(t *testing.T) {
 
 	if abs, err := filepath.Abs(dir); err == nil && t.Failed() {
 		t.Logf("(Filenames are relative to %s.)", abs)
+	}
+}
+
+// checkDifferences reports whether the txtars in result and disk
+// differ, other than in the contents of golden files containing unified diffs
+func checkDifferences(t *testing.T, result, disk []byte) {
+	got := txtar.Parse(result) // the computed slice of file retains the ordering in result
+	want := txtar.Parse(disk)
+	for i, tf := range got.Files {
+		if i >= len(want.Files) {
+			t.Errorf("test failed to create file %s", tf.Name)
+			continue
+		}
+		// if they are both golden files (name starts with @) and both unified diffs
+		// (both start with @@, then the difference is insignificant)
+		ff := want.Files[i]
+		if strings.HasPrefix(tf.Name, "@") && strings.HasPrefix(ff.Name, "@") && tf.Name == ff.Name &&
+			bytes.HasPrefix(tf.Data, []byte("@@")) && bytes.HasPrefix(ff.Data, []byte("@@")) {
+			continue
+		}
+		if !bytes.Equal(tf.Data, ff.Data) {
+			t.Errorf("%s differs, got:%q want:%q", tf.Name, tf.Data, ff.Data)
+		}
 	}
 }
 
@@ -994,7 +1022,7 @@ func newEnv(t *testing.T, cache *cache.Cache, files, proxyFiles map[string][]byt
 	// Put a debug instance in the context to prevent logging to stderr.
 	// See associated TODO in runner.go: we should revisit this pattern.
 	ctx := context.Background()
-	ctx = debug.WithInstance(ctx)
+	ctx = debug.WithInstance(ctx, "")
 
 	awaiter := integration.NewAwaiter(sandbox.Workdir)
 
@@ -1022,8 +1050,8 @@ func newEnv(t *testing.T, cache *cache.Cache, files, proxyFiles map[string][]byt
 
 	var mcpSession *mcp.ClientSession
 	if enableMCP {
-		client := mcp.NewClient("test", "v1.0.0", nil)
-		mcpSession, err = client.Connect(ctx, mcp.NewSSEClientTransport(mcpServer.URL, nil))
+		client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "v1.0.0"}, nil)
+		mcpSession, err = client.Connect(ctx, &mcp.SSEClientTransport{Endpoint: mcpServer.URL}, nil)
 		if err != nil {
 			t.Fatalf("fail to connect to mcp server: %v", err)
 		}
@@ -1462,13 +1490,13 @@ func checkChangedFiles(mark marker, changed map[string][]byte, golden *Golden) {
 }
 
 // checkDiffs checks that the diff content stored in the given golden directory
-// converts the orginal contents into the changed contents.
+// converts the original contents into the changed contents.
 // (This logic is strange because hundreds of existing marker tests were created
 // containing a modified version of unified diffs.)
 func checkDiffs(mark marker, changed map[string][]byte, golden *Golden) {
 	for name, after := range changed {
 		before := mark.run.env.FileContent(name)
-		edits := myers.ComputeEdits(before, string(after))
+		edits := diff.Lines(before, string(after))
 		d, err := diff.ToUnified("before", "after", before, edits, 0)
 		if err != nil {
 			// Can't happen: edits are consistent.
@@ -1490,7 +1518,7 @@ func checkDiffs(mark marker, changed map[string][]byte, golden *Golden) {
 				mark.note.Name, name, got)
 			return
 		} else {
-			// restore the ToUnifed header lines deleted above
+			// restore the ToUnified header lines deleted above
 			// before calling ApplyUnified
 			diffsFromTest := "--- \n+++ \n" + string(tdiffs)
 			want, err := diff.ApplyUnified(diffsFromTest, before)
@@ -2630,11 +2658,12 @@ func mcpToolMarker(mark marker, tool string, rawArgs string) {
 
 	var buf bytes.Buffer
 	for i, c := range res.Content {
-		if c.Type != "text" {
-			mark.errorf("unsupported return content[%v] type: %s", i, c.Type)
+		text, ok := c.(*mcp.TextContent)
+		if !ok {
+			mark.errorf("unsupported return content[%v] type: %T", i, c)
 			continue
 		}
-		buf.WriteString(c.Text)
+		buf.WriteString(text.Text)
 	}
 	if !bytes.HasSuffix(buf.Bytes(), []byte{'\n'}) {
 		buf.WriteString("\n") // all golden content is newline terminated

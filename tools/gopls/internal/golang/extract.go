@@ -303,7 +303,7 @@ func stmtToInsertVarBefore(cur inspector.Cursor, variables []*variable) (token.P
 				break
 			}
 		}
-		if !astutil.CursorValid(curStmt) {
+		if !curStmt.Valid() {
 			return 0, fmt.Errorf("no enclosing statement")
 		}
 		cur = curStmt
@@ -326,7 +326,7 @@ func stmtToInsertVarBefore(cur inspector.Cursor, variables []*variable) (token.P
 	// baseIfStmt walks up the if/else-if chain until we get to
 	// the top of the current if chain.
 	baseIfStmt := func(curIf inspector.Cursor) (token.Pos, error) {
-		for astutil.IsChildOf(curIf, edge.IfStmt_Else) {
+		for curIf.ParentEdgeKind() == edge.IfStmt_Else {
 			curIf = curIf.Parent()
 			if hasFreeVar(curIf.Node().(*ast.IfStmt).Init) {
 				return 0, fmt.Errorf("else-if's init has free variable")
@@ -483,7 +483,7 @@ func canExtractVariable(info *types.Info, curFile inspector.Cursor, start, end t
 	//   x := *newVar + 1
 	//   *newVar = 2
 	for _, curExpr := range curExprs {
-		switch ek, _ := curExpr.ParentEdge(); ek {
+		switch curExpr.ParentEdgeKind() {
 		case edge.AssignStmt_Lhs:
 			return nil, fmt.Errorf("node %T is in LHS of an AssignStmt", expr)
 		case edge.ValueSpec_Names:
@@ -598,8 +598,20 @@ func extractFunctionMethod(cpkg *cache.Package, pgf *parsego.File, start, end to
 
 	// Narrow (start, end) to the located nodes.
 	start, end = curStart.Node().Pos(), curEnd.Node().End()
-
 	outer := curFuncDecl.Node().(*ast.FuncDecl)
+
+	// Labeled statements have un-intuitive ranges.
+	// Technically they end at the end of the statement
+	// that they label, but user expectation is that the label
+	// is a pseudo-statement by itself. This is especially confusing when
+	// the statement that's labeled is a multi-line block statement.
+	//
+	// If the end cursor is the identifier in a labeled statement,
+	// we expand the range to include the colon.
+	// That way, we include the label, but not the statement being labeled
+	if curEnd.ParentEdgeKind() == edge.LabeledStmt_Label {
+		end = curEnd.Parent().Node().(*ast.LabeledStmt).Colon + 1
+	}
 
 	// A return statement is non-nested if its parent node is equal to the parent node
 	// of the first node in the selection. These cases must be handled separately because
@@ -985,27 +997,18 @@ func extractFunctionMethod(cpkg *cache.Package, pgf *parsego.File, start, end to
 			Value: "0",
 		}
 		var branchStmts []*ast.BranchStmt
-		var stack []ast.Node
 		// Add the zero "ctrl" value to each return statement in the extracted block.
-		ast.Inspect(extractedBlock, func(n ast.Node) bool {
-			if n != nil {
-				stack = append(stack, n)
-			} else {
-				stack = stack[:len(stack)-1]
-			}
+		astutil.PreorderStack(extractedBlock, nil, func(n ast.Node, stack []ast.Node) bool {
 			switch n := n.(type) {
 			case *ast.ReturnStmt:
 				n.Results = append(n.Results, zeroValExpr)
 			case *ast.BranchStmt:
 				// Collect a list of branch statements in the extracted block to examine later.
-				if isFreeBranchStmt(stack) {
+				if isFreeBranchStmt(append(stack, n), extractedBlock) {
 					branchStmts = append(branchStmts, n)
 				}
 			case *ast.FuncLit:
-				// Don't descend into nested functions. When we return false
-				// here, ast.Inspect does not give us a "pop" event when leaving
-				// the subtree, so we need to pop here. (golang/go#73319)
-				stack = stack[:len(stack)-1]
+				// Don't descend into nested functions.
 				return false
 			}
 			return true
@@ -1977,18 +1980,27 @@ nextBranch:
 }
 
 // isFreeBranchStmt returns true if the relevant ancestor for the branch
-// statement at stack[len(stack)-1] cannot be found in the stack. This is used
-// when we are examining the extracted block, since type information isn't
-// available. We need to find the location of the label without using
-// types.Info.
-func isFreeBranchStmt(stack []ast.Node) bool {
+// statement at stack[len(stack)-1] cannot be found in the stack (for
+// break/continue) or the extracted block (for goto). This is used when we are
+// examining the extracted block, since type information isn't available. We
+// need to find the location of the label without using types.Info.
+// We treat goto and break/continue separately because while break/continue
+// must be used within a for, range, switch, or select, goto's use is
+// less restrictive within a function body.
+func isFreeBranchStmt(stack []ast.Node, extractedBlock *ast.BlockStmt) bool {
 	switch node := stack[len(stack)-1].(type) {
 	case *ast.BranchStmt:
 		isLabeled := node.Label != nil
 		switch node.Tok {
 		case token.GOTO:
 			if isLabeled {
-				return !enclosingLabel(stack, node.Label.Name)
+				for _, stmt := range extractedBlock.List {
+					if l, ok := stmt.(*ast.LabeledStmt); ok && l.Label != nil && l.Label.Name == node.Label.Name {
+						// We found the label in the extracted block, so it's not a free branch stmt.
+						return false
+					}
+				}
+				return true
 			}
 		case token.BREAK, token.CONTINUE:
 			// Find innermost relevant ancestor for break/continue.
@@ -2009,14 +2021,4 @@ func isFreeBranchStmt(stack []ast.Node) bool {
 	}
 	// We didn't find the relevant ancestor on the path, so this must be a free branch statement.
 	return true
-}
-
-// enclosingLabel returns true if the given label is found on the stack.
-func enclosingLabel(stack []ast.Node, label string) bool {
-	for _, n := range stack {
-		if labelStmt, ok := n.(*ast.LabeledStmt); ok && labelStmt.Label.Name == label {
-			return true
-		}
-	}
-	return false
 }

@@ -1606,7 +1606,7 @@
 						},
 						{
 							"Name": "\"reflecttypefor\"",
-							"Doc": "replace reflect.TypeOf(x) with TypeFor[T]()\n\nThis analyzer suggests fixes to replace uses of reflect.TypeOf(x) with\nreflect.TypeFor, introduced in go1.22, when the desired runtime type\nis known at compile time, for example:\n\n\treflect.TypeOf(uint32(0))        -\u003e reflect.TypeFor[uint32]()\n\treflect.TypeOf((*ast.File)(nil)) -\u003e reflect.TypeFor[*ast.File]()\n\nIt also offers a fix to simplify the construction below, which uses\nreflect.TypeOf to return the runtime type for an interface type,\n\n\treflect.TypeOf((*io.Reader)(nil)).Elem()\n\nto:\n\n\treflect.TypeFor[io.Reader]()\n\nNo fix is offered in cases when the runtime type is dynamic, such as:\n\n\tvar r io.Reader = ...\n\treflect.TypeOf(r)\n\nor when the operand has potential side effects.",
+							"Doc": "replace reflect.TypeOf(x) with TypeFor[T]()\n\nThis analyzer suggests fixes to replace uses of reflect.TypeOf(x) with\nreflect.TypeFor, introduced in go1.22, when the desired runtime type\nis known at compile time, for example:\n\n\treflect.TypeOf(uint32(0))        -\u003e reflect.TypeFor[uint32]()\n\treflect.TypeOf((*ast.File)(nil)) -\u003e reflect.TypeFor[*ast.File]()\n\nIt also offers a fix to simplify the constructions below, which use\nreflect.TypeOf to return the runtime type for an interface type,\n\n\treflect.TypeOf((*io.Reader)(nil)).Elem()\n\nor:\n\n\treflect.TypeOf([]io.Reader(nil)).Elem()\n\nto:\n\n\treflect.TypeFor[io.Reader]()\n\nNo fix is offered in cases when the runtime type is dynamic, such as:\n\n\tvar r io.Reader = ...\n\treflect.TypeOf(r)\n\nor when the operand has potential side effects.",
 							"Default": "true",
 							"Status": ""
 						},
@@ -1702,7 +1702,7 @@
 						},
 						{
 							"Name": "\"stringsbuilder\"",
-							"Doc": "replace += with strings.Builder\n\nThis analyzer replaces repeated string += string concatenation\noperations with calls to Go 1.10's strings.Builder.\n\nFor example:\n\n\tvar s = \"[\"\n\tfor x := range seq {\n\t\ts += x\n\t\ts += \".\"\n\t}\n\ts += \"]\"\n\tuse(s)\n\nis replaced by:\n\n\tvar s strings.Builder\n\ts.WriteString(\"[\")\n\tfor x := range seq {\n\t\ts.WriteString(x)\n\t\ts.WriteString(\".\")\n\t}\n\ts.WriteString(\"]\")\n\tuse(s.String())\n\nThis avoids quadratic memory allocation and improves performance.\n\nThe analyzer requires that all references to s except the final one\nare += operations. To avoid warning about trivial cases, at least one\nmust appear within a loop. The variable s must be a local\nvariable, not a global or parameter.\n\nThe sole use of the finished string must be the last reference to the\nvariable s. (It may appear within an intervening loop or function literal,\nsince even s.String() is called repeatedly, it does not allocate memory.)\n\nOften the addend is a call to fmt.Sprintf, as in this example:\n\n\tvar s string\n\tfor x := range seq {\n\t\ts += fmt.Sprintf(\"%v\", x)\n\t}\n\nwhich, once the suggested fix is applied, becomes:\n\n\tvar s strings.Builder\n\tfor x := range seq {\n\t\ts.WriteString(fmt.Sprintf(\"%v\", x))\n\t}\n\nThe WriteString call can be further simplified to the more efficient\nfmt.Fprintf(\u0026s, \"%v\", x), avoiding the allocation of an intermediary.\nHowever, stringsbuilder does not perform this simplification;\nit requires staticcheck analyzer QF1012. (See https://go.dev/issue/76918.)",
+							"Doc": "replace += with strings.Builder\n\nThis analyzer replaces repeated string += string concatenation\noperations with calls to Go 1.10's strings.Builder.\n\nFor example:\n\n\tvar s = \"[\"\n\tfor x := range seq {\n\t\ts += x\n\t\ts += \".\"\n\t}\n\ts += \"]\"\n\tuse(s)\n\nis replaced by:\n\n\tvar s strings.Builder\n\ts.WriteString(\"[\")\n\tfor x := range seq {\n\t\ts.WriteString(x)\n\t\ts.WriteString(\".\")\n\t}\n\ts.WriteString(\"]\")\n\tuse(s.String())\n\nThis avoids quadratic memory allocation and improves performance.\n\nThe analyzer requires that all references to s before the final uses\nare += operations. To avoid warning about trivial cases, at least one\nmust appear within a loop. The variable s must be a local\nvariable, not a global or parameter.\n\nAll uses of the finished string must come after the last += operation.\nEach such use will be replaced by a call to strings.Builder's String method.\n(These may appear within an intervening loop or function literal, since even\nif s.String() is called repeatedly, it does not allocate memory.)\n\nOften the addend is a call to fmt.Sprintf, as in this example:\n\n\tvar s string\n\tfor x := range seq {\n\t\ts += fmt.Sprintf(\"%v\", x)\n\t}\n\nwhich, once the suggested fix is applied, becomes:\n\n\tvar s strings.Builder\n\tfor x := range seq {\n\t\ts.WriteString(fmt.Sprintf(\"%v\", x))\n\t}\n\nThe WriteString call can be further simplified to the more efficient\nfmt.Fprintf(\u0026s, \"%v\", x), avoiding the allocation of an intermediary.\nHowever, stringsbuilder does not perform this simplification;\nit requires staticcheck analyzer QF1012. (See https://go.dev/issue/76918.)",
 							"Default": "true",
 							"Status": ""
 						},
@@ -1817,6 +1817,12 @@
 						{
 							"Name": "\"waitgroup\"",
 							"Doc": "replace wg.Add(1)/go/wg.Done() with wg.Go\n\nThe waitgroup analyzer simplifies goroutine management with `sync.WaitGroup`.\nIt replaces the common pattern\n\n\twg.Add(1)\n\tgo func() {\n\t\tdefer wg.Done()\n\t\t...\n\t}()\n\nwith a single call to\n\n\twg.Go(func(){ ... })\n\nwhich was added in Go 1.25.",
+							"Default": "true",
+							"Status": ""
+						},
+						{
+							"Name": "\"writestring\"",
+							"Doc": "detect inefficient string concatenation in uses of WriteString\n\nThe writestring analyzer offers to replace a call to WriteString(x + y) by\ntwo calls WriteString(x); WriteString(y). This is more efficient because it\navoids the additional memory allocation produced by string concatenation;\ninstead we just write each string into the buffer directly.\n\nIt explicitly looks for calls to certain well-known writers such as\nbytes.Buffer, strings.Builder and bufio.Writer. The analyzer will not suggest\na fix for calls to, say, (*os.File).WriteString, because for certain kinds of\nfile such as a UDP socket, it could split a single message into two.\nSimilarly it does not offer fixes when the type of the writer is unknown (as\nin calls to io.WriteString).\n\nFor example:\n\n\tfunc f(a string, b string) string {\n\t\t var s strings.Builder\n\t\t s.WriteString(a+b)\n\t\t return s.String()\n\t}\n\nwould become:\n\n\tfunc f(a string, b string) string {\n\t\tvar s strings.Builder\n\t\ts.WriteString(a)\n\t\ts.WriteString(b)\n\t\treturn s.String()\n\t}",
 							"Default": "true",
 							"Status": ""
 						},
@@ -2023,7 +2029,7 @@
 						},
 						{
 							"Name": "\"ignoredError\"",
-							"Doc": "`\"ignoredError\"` inlay hints for implicitly discarded errors:\n```go\n\tf.Close() // ignore error\n```\nThis check inserts an `// ignore error` hint following any\nstatement that is a function call whose error result is\nimplicitly ignored.\n\nTo suppress the hint, write an actual comment containing\n\"ignore error\" following the call statement, or explictly\nassign the result to a blank variable. A handful of common\nfunctions such as `fmt.Println` are excluded from the\ncheck.\n",
+							"Doc": "`\"ignoredError\"` inlay hints for implicitly discarded errors:\n```go\n\tf.Close() // ignore error\n```\nThis check inserts an `// ignore error` hint following any\nstatement that is a function call whose error result is\nimplicitly ignored.\n\nTo suppress the hint, write an actual comment containing\n\"ignore error\" following the call statement, or explicitly\nassign the result to a blank variable. A handful of common\nfunctions such as `fmt.Println` are excluded from the\ncheck.\n",
 							"Default": "false",
 							"Status": ""
 						},
@@ -2113,7 +2119,7 @@
 			{
 				"Name": "semanticTokens",
 				"Type": "bool",
-				"Doc": "semanticTokens controls whether the LSP server will send\nsemantic tokens to the client.\n",
+				"Doc": "semanticTokens determines whether gopls will return a\nSemanticTokensProvider at initialization, or respond\nto request for semantic tokens.\n",
 				"EnumKeys": {
 					"ValueType": "",
 					"Keys": null
@@ -2234,6 +2240,20 @@
 				"Default": "false",
 				"Status": "",
 				"Hierarchy": "formatting",
+				"DeprecationMessage": ""
+			},
+			{
+				"Name": "maxFileCacheBytes",
+				"Type": "int64",
+				"Doc": "maxFileCacheBytes sets a soft limit on the file cache size in bytes.\nIf zero, the default budget is used.\n\nThe cache may temporarily use more than this amount.\nAlso, this parameter limits file contents; disk block usage\nas measured by du(1) may be significantly higher.\n",
+				"EnumKeys": {
+					"ValueType": "",
+					"Keys": null
+				},
+				"EnumValues": null,
+				"Default": "0",
+				"Status": "experimental",
+				"Hierarchy": "",
 				"DeprecationMessage": ""
 			},
 			{
@@ -3515,7 +3535,7 @@
 		},
 		{
 			"Name": "reflecttypefor",
-			"Doc": "replace reflect.TypeOf(x) with TypeFor[T]()\n\nThis analyzer suggests fixes to replace uses of reflect.TypeOf(x) with\nreflect.TypeFor, introduced in go1.22, when the desired runtime type\nis known at compile time, for example:\n\n\treflect.TypeOf(uint32(0))        -\u003e reflect.TypeFor[uint32]()\n\treflect.TypeOf((*ast.File)(nil)) -\u003e reflect.TypeFor[*ast.File]()\n\nIt also offers a fix to simplify the construction below, which uses\nreflect.TypeOf to return the runtime type for an interface type,\n\n\treflect.TypeOf((*io.Reader)(nil)).Elem()\n\nto:\n\n\treflect.TypeFor[io.Reader]()\n\nNo fix is offered in cases when the runtime type is dynamic, such as:\n\n\tvar r io.Reader = ...\n\treflect.TypeOf(r)\n\nor when the operand has potential side effects.",
+			"Doc": "replace reflect.TypeOf(x) with TypeFor[T]()\n\nThis analyzer suggests fixes to replace uses of reflect.TypeOf(x) with\nreflect.TypeFor, introduced in go1.22, when the desired runtime type\nis known at compile time, for example:\n\n\treflect.TypeOf(uint32(0))        -\u003e reflect.TypeFor[uint32]()\n\treflect.TypeOf((*ast.File)(nil)) -\u003e reflect.TypeFor[*ast.File]()\n\nIt also offers a fix to simplify the constructions below, which use\nreflect.TypeOf to return the runtime type for an interface type,\n\n\treflect.TypeOf((*io.Reader)(nil)).Elem()\n\nor:\n\n\treflect.TypeOf([]io.Reader(nil)).Elem()\n\nto:\n\n\treflect.TypeFor[io.Reader]()\n\nNo fix is offered in cases when the runtime type is dynamic, such as:\n\n\tvar r io.Reader = ...\n\treflect.TypeOf(r)\n\nor when the operand has potential side effects.",
 			"URL": "https://pkg.go.dev/golang.org/x/tools/go/analysis/passes/modernize#reflecttypefor",
 			"Default": true
 		},
@@ -3611,7 +3631,7 @@
 		},
 		{
 			"Name": "stringsbuilder",
-			"Doc": "replace += with strings.Builder\n\nThis analyzer replaces repeated string += string concatenation\noperations with calls to Go 1.10's strings.Builder.\n\nFor example:\n\n\tvar s = \"[\"\n\tfor x := range seq {\n\t\ts += x\n\t\ts += \".\"\n\t}\n\ts += \"]\"\n\tuse(s)\n\nis replaced by:\n\n\tvar s strings.Builder\n\ts.WriteString(\"[\")\n\tfor x := range seq {\n\t\ts.WriteString(x)\n\t\ts.WriteString(\".\")\n\t}\n\ts.WriteString(\"]\")\n\tuse(s.String())\n\nThis avoids quadratic memory allocation and improves performance.\n\nThe analyzer requires that all references to s except the final one\nare += operations. To avoid warning about trivial cases, at least one\nmust appear within a loop. The variable s must be a local\nvariable, not a global or parameter.\n\nThe sole use of the finished string must be the last reference to the\nvariable s. (It may appear within an intervening loop or function literal,\nsince even s.String() is called repeatedly, it does not allocate memory.)\n\nOften the addend is a call to fmt.Sprintf, as in this example:\n\n\tvar s string\n\tfor x := range seq {\n\t\ts += fmt.Sprintf(\"%v\", x)\n\t}\n\nwhich, once the suggested fix is applied, becomes:\n\n\tvar s strings.Builder\n\tfor x := range seq {\n\t\ts.WriteString(fmt.Sprintf(\"%v\", x))\n\t}\n\nThe WriteString call can be further simplified to the more efficient\nfmt.Fprintf(\u0026s, \"%v\", x), avoiding the allocation of an intermediary.\nHowever, stringsbuilder does not perform this simplification;\nit requires staticcheck analyzer QF1012. (See https://go.dev/issue/76918.)",
+			"Doc": "replace += with strings.Builder\n\nThis analyzer replaces repeated string += string concatenation\noperations with calls to Go 1.10's strings.Builder.\n\nFor example:\n\n\tvar s = \"[\"\n\tfor x := range seq {\n\t\ts += x\n\t\ts += \".\"\n\t}\n\ts += \"]\"\n\tuse(s)\n\nis replaced by:\n\n\tvar s strings.Builder\n\ts.WriteString(\"[\")\n\tfor x := range seq {\n\t\ts.WriteString(x)\n\t\ts.WriteString(\".\")\n\t}\n\ts.WriteString(\"]\")\n\tuse(s.String())\n\nThis avoids quadratic memory allocation and improves performance.\n\nThe analyzer requires that all references to s before the final uses\nare += operations. To avoid warning about trivial cases, at least one\nmust appear within a loop. The variable s must be a local\nvariable, not a global or parameter.\n\nAll uses of the finished string must come after the last += operation.\nEach such use will be replaced by a call to strings.Builder's String method.\n(These may appear within an intervening loop or function literal, since even\nif s.String() is called repeatedly, it does not allocate memory.)\n\nOften the addend is a call to fmt.Sprintf, as in this example:\n\n\tvar s string\n\tfor x := range seq {\n\t\ts += fmt.Sprintf(\"%v\", x)\n\t}\n\nwhich, once the suggested fix is applied, becomes:\n\n\tvar s strings.Builder\n\tfor x := range seq {\n\t\ts.WriteString(fmt.Sprintf(\"%v\", x))\n\t}\n\nThe WriteString call can be further simplified to the more efficient\nfmt.Fprintf(\u0026s, \"%v\", x), avoiding the allocation of an intermediary.\nHowever, stringsbuilder does not perform this simplification;\nit requires staticcheck analyzer QF1012. (See https://go.dev/issue/76918.)",
 			"URL": "https://pkg.go.dev/golang.org/x/tools/go/analysis/passes/modernize#stringbuilder",
 			"Default": true
 		},
@@ -3730,6 +3750,12 @@
 			"Default": true
 		},
 		{
+			"Name": "writestring",
+			"Doc": "detect inefficient string concatenation in uses of WriteString\n\nThe writestring analyzer offers to replace a call to WriteString(x + y) by\ntwo calls WriteString(x); WriteString(y). This is more efficient because it\navoids the additional memory allocation produced by string concatenation;\ninstead we just write each string into the buffer directly.\n\nIt explicitly looks for calls to certain well-known writers such as\nbytes.Buffer, strings.Builder and bufio.Writer. The analyzer will not suggest\na fix for calls to, say, (*os.File).WriteString, because for certain kinds of\nfile such as a UDP socket, it could split a single message into two.\nSimilarly it does not offer fixes when the type of the writer is unknown (as\nin calls to io.WriteString).\n\nFor example:\n\n\tfunc f(a string, b string) string {\n\t\t var s strings.Builder\n\t\t s.WriteString(a+b)\n\t\t return s.String()\n\t}\n\nwould become:\n\n\tfunc f(a string, b string) string {\n\t\tvar s strings.Builder\n\t\ts.WriteString(a)\n\t\ts.WriteString(b)\n\t\treturn s.String()\n\t}",
+			"URL": "https://pkg.go.dev/golang.org/x/tools/go/analysis/passes/writestring",
+			"Default": true
+		},
+		{
 			"Name": "yield",
 			"Doc": "report calls to yield where the result is ignored\n\nAfter a yield function returns false, the caller should not call\nthe yield function again; generally the iterator should return\npromptly.\n\nThis example fails to check the result of the call to yield,\ncausing this analyzer to report a diagnostic:\n\n\tyield(1) // yield may be called again (on L2) after returning false\n\tyield(2)\n\nThe corrected code is either this:\n\n\tif yield(1) { yield(2) }\n\nor simply:\n\n\t_ = yield(1) \u0026\u0026 yield(2)\n\nIt is not always a mistake to ignore the result of yield.\nFor example, this is a valid single-element iterator:\n\n\tyield(1) // ok to ignore result\n\treturn\n\nIt is only a mistake when the yield call that returned false may be\nfollowed by another call.",
 			"URL": "https://pkg.go.dev/golang.org/x/tools/gopls/internal/analysis/yield",
@@ -3769,7 +3795,7 @@
 		},
 		{
 			"Name": "ignoredError",
-			"Doc": "`\"ignoredError\"` inlay hints for implicitly discarded errors:\n```go\n\tf.Close() // ignore error\n```\nThis check inserts an `// ignore error` hint following any\nstatement that is a function call whose error result is\nimplicitly ignored.\n\nTo suppress the hint, write an actual comment containing\n\"ignore error\" following the call statement, or explictly\nassign the result to a blank variable. A handful of common\nfunctions such as `fmt.Println` are excluded from the\ncheck.\n",
+			"Doc": "`\"ignoredError\"` inlay hints for implicitly discarded errors:\n```go\n\tf.Close() // ignore error\n```\nThis check inserts an `// ignore error` hint following any\nstatement that is a function call whose error result is\nimplicitly ignored.\n\nTo suppress the hint, write an actual comment containing\n\"ignore error\" following the call statement, or explicitly\nassign the result to a blank variable. A handful of common\nfunctions such as `fmt.Println` are excluded from the\ncheck.\n",
 			"Default": false,
 			"Status": ""
 		},

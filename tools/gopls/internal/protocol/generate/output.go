@@ -31,7 +31,7 @@ var (
 
 func generateOutput(model *Model) {
 	for _, r := range model.Requests {
-		genDecl(model, r.Method, r.Params, r.Result, r.Direction)
+		genDecl(model, r.Method, r.Params, r.Result, r.Direction, r.Line == 0)
 		genCase(model, r.Method, r.Params, r.Result, r.Direction)
 		genFunc(model, r.Method, r.Params, r.Result, r.Direction, false)
 	}
@@ -39,7 +39,7 @@ func generateOutput(model *Model) {
 		if n.Method == "$/cancelRequest" {
 			continue // handled internally by jsonrpc2
 		}
-		genDecl(model, n.Method, n.Params, nil, n.Direction)
+		genDecl(model, n.Method, n.Params, nil, n.Direction, n.Line == 0)
 		genCase(model, n.Method, n.Params, nil, n.Direction)
 		genFunc(model, n.Method, n.Params, nil, n.Direction, true)
 	}
@@ -50,7 +50,7 @@ func generateOutput(model *Model) {
 	genMarshal()
 }
 
-func genDecl(model *Model, method string, param, result *Type, dir string) {
+func genDecl(model *Model, method string, param, result *Type, dir string, experiment bool) {
 	fname := methodName(method)
 	p := ""
 	if notNil(param) {
@@ -72,11 +72,28 @@ func genDecl(model *Model, method string, param, result *Type, dir string) {
 		p = ", *ParamConfiguration"
 		ret = "([]LSPAny, error)"
 	}
-	fragment := strings.ReplaceAll(strings.TrimPrefix(method, "$/"), "/", "_")
-	msg := fmt.Sprintf("\t%s\t%s(context.Context%s) %s\n", lspLink(model, fragment), fname, p, ret)
-	if doc, ok := prependMethodDocComments[fname]; ok {
-		msg = doc + "\n\t//\n" + msg
+
+	var msg string
+	{
+		var sb strings.Builder
+
+		if doc, ok := prependMethodDocComments[fname]; ok {
+			sb.WriteString(doc)
+			sb.WriteString("\n\t//\n")
+		}
+
+		if experiment {
+			sb.WriteString("\t// Note: This is a non-standard protocol extension.\n")
+		} else {
+			fragment := strings.ReplaceAll(strings.TrimPrefix(method, "$/"), "/", "_")
+			fmt.Fprintf(&sb, "\t%s", lspLink(model, fragment))
+		}
+
+		fmt.Fprintf(&sb, "\t%s(context.Context%s) %s\n", fname, p, ret)
+
+		msg = sb.String()
 	}
+
 	switch dir {
 	case "clientToServer":
 		sdecls[method] = msg
@@ -119,14 +136,25 @@ func genCase(model *Model, method string, param, result *Type, dir string) {
 		out.WriteString("\t\t\treturn nil, true, fmt.Errorf(\"%%w: %%s\", jsonrpc2.ErrParse, err)\n\t\t}\n")
 		p = ", &params"
 
-		// If the parameter extends the TextDocumentPositionParam, verify the
-		// position is within the provided range.
+		// Ensure consistency between Range and Position. If the client provides
+		// only a Position, synthesize a zero-width Range at that location.
+		//
+		// Crucially, we do not clear the Position field. Since this request may
+		// be forwarded, the downstream receiver (gopls) will re-validate that
+		// the Position lies within the Range.
+		//
+		// TODO(hxjiang): define util function
+		// func (*protocol.Position) EmptyRange() protocol.Range.
 		if extends(nm, "TextDocumentPositionParams") {
-			out.WriteString(`		if !params.Range.Empty() && !params.Range.Contains(params.Position) {
+			out.WriteString(`		if params.Range == (Range{}) {
+			params.Range = Range{
+				Start: params.Position,
+				End:   params.Position,
+			}
+		} else if !params.Range.Contains(params.Position) {
 			return nil, true, fmt.Errorf("position %%v is outside the provided range %%v.", params.Position, params.Range)
 		}
 `)
-
 		}
 
 	}
@@ -314,6 +342,11 @@ func genProps(out *bytes.Buffer, props []NameType, name string) {
 			json = fmt.Sprintf(" `json:\"%s,omitempty\"`", p.Name)
 		}
 		generateDoc(out, p.Documentation)
+		if docs := appendTypePropDocComments[name]; docs != nil {
+			if doc, ok := docs[p.Name]; ok {
+				out.WriteString(doc)
+			}
+		}
 		if star {
 			fmt.Fprintf(out, "\t%s *%s %s\n", goName(p.Name), tp, json)
 		} else {
