@@ -1,0 +1,17 @@
+{
+  "forked_folders": [
+    { "folder": "go", "gh_project": "golang/go" },
+    { "folder": "tools", "gh_project": "golang/tools" },
+    { "folder": "delve", "gh_project": "go-delve/delve" }
+  ],
+  "branch_mappings": [
+    {
+      "branch": "main",
+      "upstream": [
+        { "gh_project": "golang/go", "branch": "master" },
+        { "gh_project": "golang/tools", "branch": "master" },
+        { "gh_project": "go-delve/delve", "branch": "master" }
+      ]
+    }
+  ]
+}
