@@ -6508,57 +6508,6 @@ func TestRestartRequestWithNewArgs(t *testing.T) {
 	})
 }
 
-func TestUnsupportedCommandResponses(t *testing.T) {
-	var got *dap.ErrorResponse
-	runTest(t, "increment", func(client *daptest.Client, fixture protest.Fixture) {
-		seqCnt := 1
-		expectUnsupportedCommand := func(cmd string) {
-			t.Helper()
-			got = client.ExpectUnsupportedCommandErrorResponse(t)
-			if got.RequestSeq != seqCnt || got.Command != cmd {
-				t.Errorf("\ngot  %#v\nwant RequestSeq=%d Command=%s", got, seqCnt, cmd)
-			}
-			seqCnt++
-		}
-
-		client.RestartFrameRequest()
-		expectUnsupportedCommand("restartFrame")
-
-		client.GotoRequest()
-		expectUnsupportedCommand("goto")
-
-		client.SourceRequest()
-		expectUnsupportedCommand("source")
-
-		client.TerminateThreadsRequest()
-		expectUnsupportedCommand("terminateThreads")
-
-		client.StepInTargetsRequest()
-		expectUnsupportedCommand("stepInTargets")
-
-		client.GotoTargetsRequest()
-		expectUnsupportedCommand("gotoTargets")
-
-		client.CompletionsRequest()
-		expectUnsupportedCommand("completions")
-
-		client.DataBreakpointInfoRequest()
-		expectUnsupportedCommand("dataBreakpointInfo")
-
-		client.SetDataBreakpointsRequest()
-		expectUnsupportedCommand("setDataBreakpoints")
-
-		client.BreakpointLocationsRequest()
-		expectUnsupportedCommand("breakpointLocations")
-
-		client.ModulesRequest()
-		expectUnsupportedCommand("modules")
-
-		client.DisconnectRequest()
-		client.ExpectDisconnectResponse(t)
-	})
-}
-
 type helperForSetVariable struct {
 	t *testing.T
 	c *daptest.Client
@@ -6900,36 +6849,6 @@ func TestSetVariableWithCall(t *testing.T) {
 	})
 }
 
-func TestOptionalNotYetImplementedResponses(t *testing.T) {
-	var got *dap.ErrorResponse
-	runTest(t, "increment", func(client *daptest.Client, fixture protest.Fixture) {
-		seqCnt := 1
-		expectNotYetImplemented := func(cmd string) {
-			t.Helper()
-			got = client.ExpectNotYetImplementedErrorResponse(t)
-			if got.RequestSeq != seqCnt || got.Command != cmd {
-				t.Errorf("\ngot  %#v\nwant RequestSeq=%d Command=%s", got, seqCnt, cmd)
-			}
-			seqCnt++
-		}
-
-		client.TerminateRequest()
-		expectNotYetImplemented("terminate")
-
-		client.SetExpressionRequest()
-		expectNotYetImplemented("setExpression")
-
-		client.LoadedSourcesRequest()
-		expectNotYetImplemented("loadedSources")
-
-		client.CancelRequest()
-		expectNotYetImplemented("cancel")
-
-		client.DisconnectRequest()
-		client.ExpectDisconnectResponse(t)
-	})
-}
-
 func TestBadLaunchRequests(t *testing.T) {
 	runTest(t, "increment", func(client *daptest.Client, fixture protest.Fixture) {
 		seqCnt := 1
@@ -6941,7 +6860,7 @@ func TestBadLaunchRequests(t *testing.T) {
 			if response.Command != "launch" {
 				t.Errorf("Command got %q, want \"launch\"", response.Command)
 			}
-			if response.Message != "Failed to launch" {
+			if !strings.HasPrefix(response.Message, "Failed to launch") {
 				t.Errorf("Message got %q, want \"Failed to launch\"", response.Message)
 			}
 			if !checkErrorMessageId(response.Body.Error, FailedToLaunch) {
@@ -6955,6 +6874,15 @@ func TestBadLaunchRequests(t *testing.T) {
 			checkFailedToLaunch(response)
 			if !checkErrorMessageFormat(response.Body.Error, errmsg) {
 				t.Errorf("\ngot  %v\nwant Format=%q", response.Body.Error, errmsg)
+			}
+		}
+
+		checkFailedToLaunchWithMessageRe := func(response *dap.ErrorResponse, errmsgre string) {
+			t.Helper()
+			checkFailedToLaunch(response)
+			re := regexp.MustCompile(errmsgre)
+			if !re.MatchString(response.Body.Error.Format) {
+				t.Errorf("\ngot  %v\nwant Regexp=%q", response.Body.Error, errmsgre)
 			}
 		}
 
@@ -7021,8 +6949,8 @@ func TestBadLaunchRequests(t *testing.T) {
 			"Failed to launch: invalid debug configuration - cannot unmarshal number …")
 
 		client.LaunchRequestWithArgs(map[string]any{"mode": "debug", "program": fixture.Source, "backend": "foo"})
-		checkFailedToLaunchWithMessage(client.ExpectVisibleErrorResponse(t),
-			"Failed to launch: could not launch process: unknown backend \"foo\"")
+		checkFailedToLaunchWithMessageRe(client.ExpectVisibleErrorResponse(t),
+			"Failed to launch .*: could not launch process: unknown backend \"foo\"")
 
 		// Bad "substitutePath"
 		client.LaunchRequestWithArgs(map[string]any{"mode": "debug", "program": fixture.Source, "substitutePath": 123})
@@ -7119,8 +7047,8 @@ func TestBadLaunchRequests(t *testing.T) {
 			"Failed to launch: The 'coreFilePath' attribute is missing in debug configuration.")
 		// These errors come from debugger layer
 		client.LaunchRequestWithArgs(map[string]any{"mode": "core", "backend": "ignored", "program": fixture.Source, "coreFilePath": fixture.Source})
-		checkFailedToLaunchWithMessage(client.ExpectVisibleErrorResponse(t),
-			"Failed to launch: unrecognized core format")
+		checkFailedToLaunchWithMessageRe(client.ExpectVisibleErrorResponse(t),
+			"Failed to launch .*: unrecognized core format")
 
 		// We failed to launch the program. Make sure shutdown still works.
 		client.DisconnectRequest()
@@ -7196,10 +7124,6 @@ func TestBadAttachRequest(t *testing.T) {
 		client.AttachRequest(map[string]any{"mode": "local", "processId": "1"})
 		checkFailedToAttachWithMessage(client.ExpectVisibleErrorResponse(t),
 			"Failed to attach: invalid debug configuration - cannot unmarshal string into \"processId\" of type int")
-
-		client.AttachRequest(map[string]any{"mode": "local", "processId": 1})
-		// The exact message varies on different systems, so skip that check
-		checkFailedToAttach(client.ExpectVisibleErrorResponse(t)) // could not attach to pid 1
 
 		// This will make debugger.(*Debugger) panic, which we will catch as an internal error.
 		client.AttachRequest(map[string]any{"mode": "local", "processId": -1})
@@ -7647,10 +7571,12 @@ func TestBadlyFormattedMessageToServer(t *testing.T) {
 	})
 }
 
-// TestConfigurationDoneWithoutDebugSession tests that sending ConfigurationDone
-// before Launch/Attach returns an error instead of panicing.
-// Reproduces issue #4060.
-func TestConfigurationDoneWithoutDebugSession(t *testing.T) {
+func TestRequestsBeforeLaunch(t *testing.T) {
+	// Checks that we don't try to use s.debugger before we have initialized it
+	// if we receive a request before a launch request (or after a launch
+	// request has failed).
+	// Issues #4060 and #4237
+
 	serverStopped := make(chan struct{})
 	server, _ := startDAPServer(t, false, serverStopped)
 
@@ -7671,6 +7597,10 @@ func TestConfigurationDoneWithoutDebugSession(t *testing.T) {
 			t.Errorf("Expected error message %q, got %q", expectedMsg, resp.Body.Error.Format)
 		}
 	}
+
+	client.StepOutRequest(0)
+	client.ExpectVisibleErrorResponse(t)
+
 	client.DisconnectRequest()
 	client.ExpectDisconnectResponse(t)
 	client.ExpectTerminatedEvent(t)

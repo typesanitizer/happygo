@@ -2269,7 +2269,7 @@ func (c *Commands) printVar(t *Term, ctx callContext, args string) error {
 
 	t.stdout.pw.PageMaybe(nil)
 
-	fmt.Fprintln(t.stdout, val.MultilineString("", fmtstr))
+	fmt.Fprintln(t.stdout, val.StringWithOptions("", fmtstr, api.PrettyNewlines))
 
 	if val.Kind == reflect.Chan {
 		fmt.Fprintln(t.stdout)
@@ -2350,7 +2350,7 @@ func (t *Term) printFilteredVariables(varType string, vars []api.Variable, filte
 			if cfg == ShortLoadConfig {
 				fmt.Fprintf(t.stdout, "%s = %s\n", name, v.SinglelineString())
 			} else {
-				fmt.Fprintf(t.stdout, "%s = %s\n", name, v.MultilineString("", ""))
+				fmt.Fprintf(t.stdout, "%s = %s\n", name, multiLineVar(&v, ""))
 			}
 		}
 	}
@@ -2760,7 +2760,7 @@ func libraries(t *Term, ctx callContext, args string) error {
 		return nil
 	}
 
-	libs, err := t.client.ListDynamicLibraries()
+	libs, _, err := t.client.ListDynamicLibraries()
 	if err != nil {
 		return err
 	}
@@ -2795,6 +2795,10 @@ func printcontext(t *Term, state *api.DebuggerState) {
 			}
 		}
 		return
+	}
+
+	if state.StopReason == "shared library loaded" {
+		fmt.Fprintln(t.stdout, "Go shared library loaded. You can now set breakpoints in Go code.")
 	}
 
 	if state.Pid != t.oldPid {
@@ -2863,7 +2867,7 @@ func printReturnValues(t *Term, th *api.Thread) {
 	}
 	fmt.Fprintln(t.stdout, "Values returned:")
 	for _, v := range th.ReturnValues {
-		fmt.Fprintf(t.stdout, "\t%s: %s\n", v.Name, v.MultilineString("\t", ""))
+		fmt.Fprintf(t.stdout, "\t%s: %s\n", v.Name, multiLineVar(&v, "\t"))
 	}
 	fmt.Fprintln(t.stdout)
 }
@@ -2994,13 +2998,13 @@ func printBreakpointInfo(t *Term, th *api.Thread, tracepointOnNewline bool) {
 
 	for _, v := range bpi.Variables {
 		tracepointnl()
-		fmt.Fprintf(t.stdout, "\t%s: %s\n", v.Name, v.MultilineString("\t", ""))
+		fmt.Fprintf(t.stdout, "\t%s: %s\n", v.Name, multiLineVar(&v, "\t"))
 	}
 
 	for _, v := range bpi.Locals {
 		tracepointnl()
 		if *bp.LoadLocals == longLoadConfig {
-			fmt.Fprintf(t.stdout, "\t%s: %s\n", v.Name, v.MultilineString("\t", ""))
+			fmt.Fprintf(t.stdout, "\t%s: %s\n", v.Name, multiLineVar(&v, "\t"))
 		} else {
 			fmt.Fprintf(t.stdout, "\t%s: %s\n", v.Name, v.SinglelineString())
 		}
@@ -3009,7 +3013,7 @@ func printBreakpointInfo(t *Term, th *api.Thread, tracepointOnNewline bool) {
 	if bp.LoadArgs != nil && *bp.LoadArgs == longLoadConfig {
 		for _, v := range bpi.Arguments {
 			tracepointnl()
-			fmt.Fprintf(t.stdout, "\t%s: %s\n", v.Name, v.MultilineString("\t", ""))
+			fmt.Fprintf(t.stdout, "\t%s: %s\n", v.Name, multiLineVar(&v, "\t"))
 		}
 	}
 	if bpi.Stacktrace != nil {
@@ -3657,4 +3661,8 @@ func (t *Term) formatBreakpointLocation(bp *api.Breakpoint) string {
 		fmt.Fprintf(&out, "%s:%d", p, bp.Line)
 	}
 	return out.String()
+}
+
+func multiLineVar(v *api.Variable, indent string) string {
+	return v.StringWithOptions(indent, "", api.PrettyNewlines)
 }

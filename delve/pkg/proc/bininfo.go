@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"cmp"
 	"context"
+	"debug/buildinfo"
 	"debug/dwarf"
 	"debug/elf"
 	"debug/macho"
@@ -1020,6 +1021,11 @@ type Image struct {
 	debugLineStr []byte
 
 	symTable *gosym.Table
+	Trimpath bool // trimpath used
+
+	// IsGo is true when the image has been confirmed to be a Go binary,
+	// e.g. by checking for a Go producer string in DWARF compile units.
+	IsGo bool
 
 	typeCache map[dwarf.Offset]godwarf.Type
 
@@ -1048,6 +1054,17 @@ func (image *Image) registerRuntimeTypeToDIE(entry *dwarf.Entry, ardr *reader.Re
 
 func (image *Image) Stripped() bool {
 	return image.dwarf == nil
+}
+
+// HasGoImage returns true if any loaded image is a Go binary with
+// successfully loaded debug info.
+func (bi *BinaryInfo) HasGoImage() bool {
+	for _, image := range bi.Images {
+		if image.IsGo && image.loadErr == nil {
+			return true
+		}
+	}
+	return false
 }
 
 // AddImage adds the specified image to bi, loading data asynchronously.
@@ -1085,6 +1102,18 @@ func (bi *BinaryInfo) AddImage(path string, addr uint64) error {
 		bi.Images[len(bi.Images)-1].loadErr = err
 	}
 	bi.macOSDebugFrameBugWorkaround()
+
+	// Detect trimpath
+	binfo, _ := buildinfo.ReadFile(path)
+	if binfo != nil {
+		for _, s := range binfo.Settings {
+			if s.Key == "-trimpath" && s.Value == "true" {
+				image.Trimpath = true
+				break
+			}
+		}
+	}
+
 	return err
 }
 
@@ -1405,6 +1434,9 @@ func (bi *BinaryInfo) findCompileUnit(pc uint64) *compileUnit {
 }
 
 func (bi *Image) findCompileUnitForOffset(off dwarf.Offset) *compileUnit {
+	if len(bi.compileUnits) == 0 {
+		return nil
+	}
 	i := sort.Search(len(bi.compileUnits), func(i int) bool {
 		return bi.compileUnits[i].offset >= off
 	})
@@ -1686,6 +1718,7 @@ func loadBinaryInfoElf(bi *BinaryInfo, image *Image, path string, addr uint64, w
 			if err != nil {
 				return fmt.Errorf("could not read debug info (%v) and could not read go symbol table (%v)", dwerr, err)
 			}
+			image.IsGo = true
 			return nil
 		}
 		image.sepDebugCloser = sepFile
@@ -2588,6 +2621,7 @@ func (bi *BinaryInfo) loadDebugInfoMaps(image *Image, debugInfoBytes, debugLineB
 			cu.Version = ctxt.offsetToVersion[cu.offset]
 			if lang, _ := entry.Val(dwarf.AttrLanguage).(int64); lang == dwarfGoLanguage {
 				cu.isgo = true
+				image.IsGo = true
 			}
 			cu.name, _ = entry.Val(dwarf.AttrName).(string)
 			compdir, _ := entry.Val(dwarf.AttrCompDir).(string)
