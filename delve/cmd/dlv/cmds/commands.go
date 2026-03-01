@@ -492,7 +492,7 @@ names selected from this list:
 	stack           Log stacktracer
 
 Additionally --log-dest can be used to specify where the logs should be
-written. 
+written.
 If the argument is a number it will be interpreted as a file descriptor,
 otherwise as a file path.
 This option will also redirect the "server listening at" message in headless
@@ -504,7 +504,7 @@ and dap modes.
 	rootCommand.AddCommand(&cobra.Command{
 		Use:   "redirect",
 		Short: "Help about file redirection.",
-		Long: `The standard file descriptors of the target process can be controlled using the '-r' and '--tty' arguments. 
+		Long: `The standard file descriptors of the target process can be controlled using the '-r' and '--tty' arguments.
 
 The --tty argument allows redirecting all standard descriptors to a terminal, specified as an argument to --tty.
 
@@ -851,7 +851,8 @@ func traceCmd(cmd *cobra.Command, args []string, conf *config.Config) int {
 					default:
 						tracepoints, err := client.GetBufferedTracepoints()
 						if err != nil {
-							panic(err)
+							fmt.Fprintf(os.Stderr, "Error retrieving buffered tracepoints: %v\n", err)
+							return
 						}
 						for _, t := range tracepoints {
 							var params strings.Builder
@@ -871,11 +872,13 @@ func traceCmd(cmd *cobra.Command, args []string, conf *config.Config) int {
 							}
 
 							if t.IsRet {
+								retVals := make([]string, 0, len(t.ReturnParams))
 								for _, p := range t.ReturnParams {
-									fmt.Fprintf(os.Stderr, "=> %#v\n", p.Value)
+									retVals = append(retVals, p.Value)
 								}
+								fmt.Fprintf(os.Stderr, ">> goroutine(%d): %s => (%s)\n", t.GoroutineID, t.FunctionName, strings.Join(retVals, ","))
 							} else {
-								fmt.Fprintf(os.Stderr, "> (%d) %s(%s)\n", t.GoroutineID, t.FunctionName, params.String())
+								fmt.Fprintf(os.Stderr, "> goroutine(%d): %s(%s)\n", t.GoroutineID, t.FunctionName, params.String())
 							}
 						}
 					}

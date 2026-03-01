@@ -763,6 +763,13 @@ func (s *Session) handleRequest(request dap.Message) {
 		return
 	}
 
+	// Reject all other requests if the target hasn't been launched
+	if s.debugger == nil {
+		r := request.(dap.RequestMessage).GetRequest()
+		s.sendShowUserErrorResponse(*r, NoDebugIsRunning, "No debug session started", "Use launch or attach request first.")
+		return
+	}
+
 	// Requests below can only be handled while target is stopped.
 	// Some of them are blocking and will be handled synchronously
 	// on this goroutine while non-blocking requests will be dispatched
@@ -930,6 +937,7 @@ func (s *Session) onInitializeRequest(request *dap.InitializeRequest) {
 	response := &dap.InitializeResponse{Response: *newResponse(request.Request)}
 	response.Body.SupportsConfigurationDoneRequest = true
 	response.Body.SupportsConditionalBreakpoints = true
+	response.Body.SupportsHitConditionalBreakpoints = true
 	response.Body.SupportsDelayedStackTraceLoading = true
 	response.Body.SupportsFunctionBreakpoints = true
 	response.Body.SupportsInstructionBreakpoints = true
@@ -1029,6 +1037,8 @@ func (s *Session) onLaunchRequest(request *dap.LaunchRequest) {
 		args.Backend = "default"
 	}
 
+	whatWeAreLaunching := "" // tracking what we are doing, purely informative for error messages
+
 	if args.Mode == "replay" {
 		// Validate trace directory
 		if args.TraceDirPath == "" {
@@ -1052,6 +1062,7 @@ func (s *Session) onLaunchRequest(request *dap.LaunchRequest) {
 		// trigger a native core file replay instead of a rr trace replay
 		s.config.Debugger.CoreFile = args.CoreFilePath
 		args.Backend = "core"
+		whatWeAreLaunching = " core file " + args.CoreFilePath
 	}
 
 	s.config.Debugger.Backend = args.Backend
@@ -1080,11 +1091,13 @@ func (s *Session) onLaunchRequest(request *dap.LaunchRequest) {
 		case "debug":
 			s.config.Debugger.ExecuteKind = debugger.ExecutingGeneratedFile
 			s.config.Debugger.Packages = []string{args.Program}
+			whatWeAreLaunching = " " + args.Program
 			s.config.Debugger.BuildFlags = args.BuildFlags.value
 			cmd, out, err = gobuild.GoBuildCombinedOutput(args.Output, []string{args.Program}, args.BuildFlags.value)
 		case "test":
 			s.config.Debugger.ExecuteKind = debugger.ExecutingGeneratedTest
 			s.config.Debugger.Packages = []string{args.Program}
+			whatWeAreLaunching = " tests of " + args.Program
 			s.config.Debugger.BuildFlags = args.BuildFlags.value
 			cmd, out, err = gobuild.GoTestBuildCombinedOutput(args.Output, []string{args.Program}, args.BuildFlags.value)
 		}
@@ -1189,7 +1202,7 @@ func (s *Session) onLaunchRequest(request *dap.LaunchRequest) {
 		cmd, stdoutReader, stderrReader, err := s.newNoDebugProcess(debugbinary, args.Args, s.config.Debugger.WorkingDir, remoteOut, args.StdinFrom, args.StdoutTo, args.StderrTo)
 		s.mu.Unlock()
 		if err != nil {
-			s.sendShowUserErrorResponse(request.Request, FailedToLaunch, "Failed to launch", err.Error())
+			s.sendShowUserErrorResponse(request.Request, FailedToLaunch, "Failed to launch"+whatWeAreLaunching, err.Error())
 			return
 		}
 		// Skip 'initialized' event, which will prevent the client from sending
@@ -1271,7 +1284,7 @@ func (s *Session) onLaunchRequest(request *dap.LaunchRequest) {
 		if s.binaryToRemove != "" {
 			gobuild.Remove(s.binaryToRemove)
 		}
-		s.sendShowUserErrorResponse(request.Request, FailedToLaunch, "Failed to launch", err.Error())
+		s.sendShowUserErrorResponse(request.Request, FailedToLaunch, "Failed to launch"+whatWeAreLaunching, err.Error())
 		if closeAll != nil {
 			closeAll()
 		}
@@ -1300,6 +1313,7 @@ func (s *Session) onLaunchRequest(request *dap.LaunchRequest) {
 	// will end the configuration sequence with 'configurationDone'.
 	s.send(&dap.InitializedEvent{Event: *newEvent("initialized")})
 	s.send(&dap.LaunchResponse{Response: *newResponse(request.Request)})
+	s.warnAboutTrimpathMaybe()
 }
 
 func (s *Session) getPackageDir(pkg string) string {
@@ -1878,10 +1892,6 @@ func closeIfOpen(ch chan struct{}) {
 // The debugger should be set by a launch or attach request. Expects the target to be halted.
 func (s *Session) onConfigurationDoneRequest(request *dap.ConfigurationDoneRequest, allowNextStateChange *syncflag) {
 	defer allowNextStateChange.raise()
-	if s.debugger == nil {
-		s.sendShowUserErrorResponse(request.Request, NoDebugIsRunning, "No debug session started", "Use launch or attach request first.")
-		return
-	}
 	if s.args.stopOnEntry {
 		e := &dap.StoppedEvent{
 			Event: *newEvent("stopped"),
@@ -2212,6 +2222,20 @@ func (s *Session) onAttachRequest(request *dap.AttachRequest) {
 	// will end the configuration sequence with 'configurationDone'.
 	s.send(&dap.InitializedEvent{Event: *newEvent("initialized")})
 	s.send(&dap.AttachResponse{Response: *newResponse(request.Request)})
+	s.warnAboutTrimpathMaybe()
+}
+
+func (s *Session) warnAboutTrimpathMaybe() {
+	imgs := s.debugger.ListDynamicLibraries()
+	if imgs[0].Trimpath {
+		s.send(&dap.OutputEvent{
+			Event: *newEvent("output"),
+			Body: dap.OutputEventBody{
+				Category: "important",
+				Output:   "Warning: debugging executable built with trimpath",
+			},
+		})
+	}
 }
 
 // onNextRequest handles 'next' request.
@@ -2889,7 +2913,7 @@ func (s *Session) convertVariableWithOpts(v *proc.Variable, qualifiedNameOrExpr 
 		}
 		return s.variableHandles.create(&fullyQualifiedVariable{v, qualifiedNameOrExpr, false /*not a scope*/, 0})
 	}
-	value = api.ConvertVar(v).SinglelineStringWithShortTypes()
+	value = formatVar(v)
 	if v.Unreadable != nil {
 		return value, 0
 	}
@@ -2903,7 +2927,7 @@ func (s *Session) convertVariableWithOpts(v *proc.Variable, qualifiedNameOrExpr 
 		// TODO(polina): Get *proc.Variable object from debugger instead. Export a function to set v.loaded to false
 		// and call v.loadValue gain with a different load config. It's more efficient, and it's guaranteed to keep
 		// working with generics.
-		value = api.ConvertVar(v).SinglelineStringWithShortTypes()
+		value = formatVar(v)
 		typeName := api.PrettyTypeName(v.DwarfType)
 		loadExpr := fmt.Sprintf("*(*%q)(%#x)", typeName, v.Addr)
 		s.config.log.Debugf("loading %s (type %s) with %s", qualifiedNameOrExpr, typeName, loadExpr)
@@ -2917,7 +2941,7 @@ func (s *Session) convertVariableWithOpts(v *proc.Variable, qualifiedNameOrExpr 
 		} else {
 			v.Children = vLoaded.Children
 			v.Value = vLoaded.Value
-			value = api.ConvertVar(v).SinglelineStringWithShortTypes()
+			value = formatVar(v)
 		}
 		return value
 	}
@@ -2949,7 +2973,7 @@ func (s *Session) convertVariableWithOpts(v *proc.Variable, qualifiedNameOrExpr 
 					} else {
 						cLoaded.Name = v.Children[0].Name // otherwise, this will be the pointer expression
 						v.Children = []proc.Variable{*cLoaded}
-						value = api.ConvertVar(v).SinglelineStringWithShortTypes()
+						value = formatVar(v)
 					}
 				} else {
 					value = reloadVariable(v, qualifiedNameOrExpr)
@@ -4119,6 +4143,9 @@ func (s *Session) runUntilStopAndNotify(command string, allowNextStateChange *sy
 			stopped.Body.Reason = "unknown"
 		case proc.StopWatchpoint:
 			stopped.Body.Reason = "data breakpoint"
+		case proc.StopSharedLibLoaded:
+			stopped.Body.Reason = "breakpoint"
+			stopped.Body.Description = proc.StopSharedLibLoaded.String()
 		default:
 			stopped.Body.Reason = "breakpoint"
 			goid, bp := s.stoppedOnBreakpointGoroutineID(state)
@@ -4462,4 +4489,8 @@ func (s *syncflag) raise() {
 	s.flag = true
 	s.mu.Unlock()
 	s.cond.Broadcast()
+}
+
+func formatVar(v *proc.Variable) string {
+	return api.ConvertVar(v).StringWithOptions("", "", api.PrettyShortenType)
 }

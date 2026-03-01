@@ -102,6 +102,7 @@ const (
 	AllNonOptimized
 	// LinkDisableDWARF enables '-ldflags="-w"'.
 	LinkDisableDWARF
+	Trimpath
 )
 
 // TempFile makes a (good enough) random temporary file name
@@ -192,6 +193,9 @@ func BuildFixture(t testing.TB, name string, flags BuildFlags) Fixture {
 		if flags&EnableDWZCompression != 0 {
 			buildFlags = append(buildFlags, "-ldflags=-compressdwarf=false")
 		}
+	}
+	if flags&Trimpath != 0 {
+		buildFlags = append(buildFlags, "-trimpath")
 	}
 	if path != "" {
 		buildFlags = append(buildFlags, name+".go")
