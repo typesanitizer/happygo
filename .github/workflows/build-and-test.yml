@@ -49,6 +49,12 @@ jobs:
         run: |
           export GOROOT="$PWD/go"
           export PATH="$GOROOT/bin:$PATH"
+          # GHA Windows runners are slower than LUCI; without extra
+          # headroom, TestGdbAutotmpTypes alone takes 48s+ and the
+          # runtime package hits the 3m timeout.
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            export GO_TEST_TIMEOUT_SCALE=2
+          fi
           go tool dist test -run='!^cmd'
 
   test-cmd:
