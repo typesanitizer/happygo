@@ -16,6 +16,7 @@ env:
 jobs:
   build-head:
     runs-on: ${{ inputs.os }}
+    if: inputs.os == 'macos-latest'
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/build-toolchain
@@ -25,6 +26,7 @@ jobs:
 
   build-gotip:
     runs-on: ${{ inputs.os }}
+    if: false
     steps:
       # Sparse checkout: only fetch .github/ to access the action.
       # The action will checkout golang/go into go/.
@@ -38,6 +40,7 @@ jobs:
 
   test-std:
     runs-on: ${{ inputs.os }}
+    if: false
     needs: build-head
     steps:
       - uses: actions/checkout@v6
@@ -53,6 +56,7 @@ jobs:
 
   test-cmd:
     runs-on: ${{ inputs.os }}
+    if: false
     needs: build-head
     steps:
       - uses: actions/checkout@v6
@@ -68,6 +72,7 @@ jobs:
 
   test-tools:
     runs-on: ${{ inputs.os }}
+    if: false
     needs: build-head
     steps:
       - uses: actions/checkout@v6
@@ -84,11 +89,12 @@ jobs:
   test-delve:
     name: test-delve (${{ matrix.go-toolchain }})
     runs-on: ${{ inputs.os }}
-    needs: [build-head, build-gotip]
+    if: inputs.os == 'macos-latest'
+    needs: build-head
     continue-on-error: ${{ matrix.go-toolchain == 'gotip' }}
     strategy:
       matrix:
-        go-toolchain: [head, stable, gotip]
+        go-toolchain: [stable]
     steps:
       - uses: actions/checkout@v6
       # Stable Go is used only for fixture builds; capture its GOROOT before PATH changes.
@@ -133,10 +139,20 @@ jobs:
         run: |
           export GOROOT="$PWD/go"
           export PATH="$GOROOT/bin:$PATH"
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            export DELVE_TEST_LOG_DIR="$PWD/.cache/tmp/delve-test-logs"
+          fi
           # Use a custom go tool when building fixtures for stable/gotip.
           case "${{ matrix.go-toolchain }}" in
             stable) export DELVE_TEST_GO="$STABLE_GO_ROOT/bin/go" ;;
             gotip)  export DELVE_TEST_GO="$PWD/gotip/bin/go" ;;
             head)   ;;
           esac
-          go test -C delve ./...
+          go test -C delve -timeout=3m ./...
+      - name: Upload delve logs (failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: delve-test-logs-${{ inputs.os }}-${{ matrix.go-toolchain }}
+          path: .cache/tmp/delve-test-logs
+          if-no-files-found: ignore

@@ -2,6 +2,7 @@ package proc
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"go/parser"
 	"go/token"
@@ -229,10 +230,18 @@ func (grp *TargetGroup) Detach(kill bool) error {
 	for i := len(grp.targets) - 1; i >= 0; i-- {
 		t := grp.targets[i]
 		isvalid, _ := t.Valid()
-		if !isvalid {
-			continue
+		var err error
+		if isvalid {
+			err = grp.detachTarget(t, kill)
+		} else {
+			err = grp.procgrp.Detach(t.Pid(), kill)
+			if err != nil {
+				var exited ErrProcessExited
+				if errors.As(err, &exited) || errors.Is(err, ErrProcessDetached) {
+					err = nil
+				}
+			}
 		}
-		err := grp.detachTarget(t, kill)
 		if err != nil {
 			errs = append(errs, fmt.Sprintf("could not detach process %d: %v", t.Pid(), err))
 		}
