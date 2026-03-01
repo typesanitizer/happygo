@@ -1970,8 +1970,16 @@ func TestClassicMap(t *testing.T) {
 	if !goversion.VersionAfterOrEqual(runtime.Version(), 1, 24) {
 		t.Skip("N/A")
 	}
-	if goversion.VersionAfterOrEqual(runtime.Version(), 1, 27) {
+	if goversion.VersionAfterOrEqual(runtime.Version(), 1, 29) {
+		// By 1.29, the previous two releases (1.28, 1.27) both lack
+		// noswissmap, so classic map support can be dropped.
 		panic("test expired, please remove")
+	}
+	if goversion.VersionAfterOrEqual(runtime.Version(), 1, 27) {
+		// NOTE(happygo): noswissmap GOEXPERIMENT was removed in Go 1.27,
+		// so we can't build classic-map fixtures. The test is still
+		// relevant for fixtures compiled with Go 1.24-1.26.
+		t.Skip("noswissmap GOEXPERIMENT removed in Go 1.27")
 	}
 	t.Setenv("GOEXPERIMENT", "noswissmap")
 
