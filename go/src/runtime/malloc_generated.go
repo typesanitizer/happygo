@@ -84,15 +84,18 @@ func mallocgcSmallScanNoHeaderSC1(size uintptr, typ *_type, needzero bool) unsaf
 
 		const elemsize = 8
 
-		scanSize := typ.PtrBytes
+		var scanSize uintptr
 		src := src0
 		if typ.Size_ == goarch.PtrSize {
 			src = (1 << (dataSize / goarch.PtrSize)) - 1
+
+			scanSize = dataSize
 		} else {
 
 			if doubleCheckHeapSetType && !asanenabled && dataSize%typ.Size_ != 0 {
 				throw("runtime: (*mspan).writeHeapBitsSmall: dataSize is not a multiple of typ.Size_")
 			}
+			scanSize = typ.PtrBytes
 			for i := typ.Size_; i < dataSize; i += typ.Size_ {
 				src |= src0 << (i / goarch.PtrSize)
 				scanSize += typ.Size_
@@ -249,15 +252,18 @@ func mallocgcSmallScanNoHeaderSC2(size uintptr, typ *_type, needzero bool) unsaf
 
 		const elemsize = 16
 
-		scanSize := typ.PtrBytes
+		var scanSize uintptr
 		src := src0
 		if typ.Size_ == goarch.PtrSize {
 			src = (1 << (dataSize / goarch.PtrSize)) - 1
+
+			scanSize = dataSize
 		} else {
 
 			if doubleCheckHeapSetType && !asanenabled && dataSize%typ.Size_ != 0 {
 				throw("runtime: (*mspan).writeHeapBitsSmall: dataSize is not a multiple of typ.Size_")
 			}
+			scanSize = typ.PtrBytes
 			for i := typ.Size_; i < dataSize; i += typ.Size_ {
 				src |= src0 << (i / goarch.PtrSize)
 				scanSize += typ.Size_
@@ -414,15 +420,18 @@ func mallocgcSmallScanNoHeaderSC3(size uintptr, typ *_type, needzero bool) unsaf
 
 		const elemsize = 24
 
-		scanSize := typ.PtrBytes
+		var scanSize uintptr
 		src := src0
 		if typ.Size_ == goarch.PtrSize {
 			src = (1 << (dataSize / goarch.PtrSize)) - 1
+
+			scanSize = dataSize
 		} else {
 
 			if doubleCheckHeapSetType && !asanenabled && dataSize%typ.Size_ != 0 {
 				throw("runtime: (*mspan).writeHeapBitsSmall: dataSize is not a multiple of typ.Size_")
 			}
+			scanSize = typ.PtrBytes
 			for i := typ.Size_; i < dataSize; i += typ.Size_ {
 				src |= src0 << (i / goarch.PtrSize)
 				scanSize += typ.Size_
@@ -579,15 +588,18 @@ func mallocgcSmallScanNoHeaderSC4(size uintptr, typ *_type, needzero bool) unsaf
 
 		const elemsize = 32
 
-		scanSize := typ.PtrBytes
+		var scanSize uintptr
 		src := src0
 		if typ.Size_ == goarch.PtrSize {
 			src = (1 << (dataSize / goarch.PtrSize)) - 1
+
+			scanSize = dataSize
 		} else {
 
 			if doubleCheckHeapSetType && !asanenabled && dataSize%typ.Size_ != 0 {
 				throw("runtime: (*mspan).writeHeapBitsSmall: dataSize is not a multiple of typ.Size_")
 			}
+			scanSize = typ.PtrBytes
 			for i := typ.Size_; i < dataSize; i += typ.Size_ {
 				src |= src0 << (i / goarch.PtrSize)
 				scanSize += typ.Size_
@@ -744,15 +756,18 @@ func mallocgcSmallScanNoHeaderSC5(size uintptr, typ *_type, needzero bool) unsaf
 
 		const elemsize = 48
 
-		scanSize := typ.PtrBytes
+		var scanSize uintptr
 		src := src0
 		if typ.Size_ == goarch.PtrSize {
 			src = (1 << (dataSize / goarch.PtrSize)) - 1
+
+			scanSize = dataSize
 		} else {
 
 			if doubleCheckHeapSetType && !asanenabled && dataSize%typ.Size_ != 0 {
 				throw("runtime: (*mspan).writeHeapBitsSmall: dataSize is not a multiple of typ.Size_")
 			}
+			scanSize = typ.PtrBytes
 			for i := typ.Size_; i < dataSize; i += typ.Size_ {
 				src |= src0 << (i / goarch.PtrSize)
 				scanSize += typ.Size_
@@ -909,15 +924,18 @@ func mallocgcSmallScanNoHeaderSC6(size uintptr, typ *_type, needzero bool) unsaf
 
 		const elemsize = 64
 
-		scanSize := typ.PtrBytes
+		var scanSize uintptr
 		src := src0
 		if typ.Size_ == goarch.PtrSize {
 			src = (1 << (dataSize / goarch.PtrSize)) - 1
+
+			scanSize = dataSize
 		} else {
 
 			if doubleCheckHeapSetType && !asanenabled && dataSize%typ.Size_ != 0 {
 				throw("runtime: (*mspan).writeHeapBitsSmall: dataSize is not a multiple of typ.Size_")
 			}
+			scanSize = typ.PtrBytes
 			for i := typ.Size_; i < dataSize; i += typ.Size_ {
 				src |= src0 << (i / goarch.PtrSize)
 				scanSize += typ.Size_
@@ -1074,15 +1092,18 @@ func mallocgcSmallScanNoHeaderSC7(size uintptr, typ *_type, needzero bool) unsaf
 
 		const elemsize = 80
 
-		scanSize := typ.PtrBytes
+		var scanSize uintptr
 		src := src0
 		if typ.Size_ == goarch.PtrSize {
 			src = (1 << (dataSize / goarch.PtrSize)) - 1
+
+			scanSize = dataSize
 		} else {
 
 			if doubleCheckHeapSetType && !asanenabled && dataSize%typ.Size_ != 0 {
 				throw("runtime: (*mspan).writeHeapBitsSmall: dataSize is not a multiple of typ.Size_")
 			}
+			scanSize = typ.PtrBytes
 			for i := typ.Size_; i < dataSize; i += typ.Size_ {
 				src |= src0 << (i / goarch.PtrSize)
 				scanSize += typ.Size_
@@ -1239,15 +1260,18 @@ func mallocgcSmallScanNoHeaderSC8(size uintptr, typ *_type, needzero bool) unsaf
 
 		const elemsize = 96
 
-		scanSize := typ.PtrBytes
+		var scanSize uintptr
 		src := src0
 		if typ.Size_ == goarch.PtrSize {
 			src = (1 << (dataSize / goarch.PtrSize)) - 1
+
+			scanSize = dataSize
 		} else {
 
 			if doubleCheckHeapSetType && !asanenabled && dataSize%typ.Size_ != 0 {
 				throw("runtime: (*mspan).writeHeapBitsSmall: dataSize is not a multiple of typ.Size_")
 			}
+			scanSize = typ.PtrBytes
 			for i := typ.Size_; i < dataSize; i += typ.Size_ {
 				src |= src0 << (i / goarch.PtrSize)
 				scanSize += typ.Size_
@@ -1404,15 +1428,18 @@ func mallocgcSmallScanNoHeaderSC9(size uintptr, typ *_type, needzero bool) unsaf
 
 		const elemsize = 112
 
-		scanSize := typ.PtrBytes
+		var scanSize uintptr
 		src := src0
 		if typ.Size_ == goarch.PtrSize {
 			src = (1 << (dataSize / goarch.PtrSize)) - 1
+
+			scanSize = dataSize
 		} else {
 
 			if doubleCheckHeapSetType && !asanenabled && dataSize%typ.Size_ != 0 {
 				throw("runtime: (*mspan).writeHeapBitsSmall: dataSize is not a multiple of typ.Size_")
 			}
+			scanSize = typ.PtrBytes
 			for i := typ.Size_; i < dataSize; i += typ.Size_ {
 				src |= src0 << (i / goarch.PtrSize)
 				scanSize += typ.Size_
@@ -1569,15 +1596,18 @@ func mallocgcSmallScanNoHeaderSC10(size uintptr, typ *_type, needzero bool) unsa
 
 		const elemsize = 128
 
-		scanSize := typ.PtrBytes
+		var scanSize uintptr
 		src := src0
 		if typ.Size_ == goarch.PtrSize {
 			src = (1 << (dataSize / goarch.PtrSize)) - 1
+
+			scanSize = dataSize
 		} else {
 
 			if doubleCheckHeapSetType && !asanenabled && dataSize%typ.Size_ != 0 {
 				throw("runtime: (*mspan).writeHeapBitsSmall: dataSize is not a multiple of typ.Size_")
 			}
+			scanSize = typ.PtrBytes
 			for i := typ.Size_; i < dataSize; i += typ.Size_ {
 				src |= src0 << (i / goarch.PtrSize)
 				scanSize += typ.Size_
@@ -1734,15 +1764,18 @@ func mallocgcSmallScanNoHeaderSC11(size uintptr, typ *_type, needzero bool) unsa
 
 		const elemsize = 144
 
-		scanSize := typ.PtrBytes
+		var scanSize uintptr
 		src := src0
 		if typ.Size_ == goarch.PtrSize {
 			src = (1 << (dataSize / goarch.PtrSize)) - 1
+
+			scanSize = dataSize
 		} else {
 
 			if doubleCheckHeapSetType && !asanenabled && dataSize%typ.Size_ != 0 {
 				throw("runtime: (*mspan).writeHeapBitsSmall: dataSize is not a multiple of typ.Size_")
 			}
+			scanSize = typ.PtrBytes
 			for i := typ.Size_; i < dataSize; i += typ.Size_ {
 				src |= src0 << (i / goarch.PtrSize)
 				scanSize += typ.Size_
@@ -1899,15 +1932,18 @@ func mallocgcSmallScanNoHeaderSC12(size uintptr, typ *_type, needzero bool) unsa
 
 		const elemsize = 160
 
-		scanSize := typ.PtrBytes
+		var scanSize uintptr
 		src := src0
 		if typ.Size_ == goarch.PtrSize {
 			src = (1 << (dataSize / goarch.PtrSize)) - 1
+
+			scanSize = dataSize
 		} else {
 
 			if doubleCheckHeapSetType && !asanenabled && dataSize%typ.Size_ != 0 {
 				throw("runtime: (*mspan).writeHeapBitsSmall: dataSize is not a multiple of typ.Size_")
 			}
+			scanSize = typ.PtrBytes
 			for i := typ.Size_; i < dataSize; i += typ.Size_ {
 				src |= src0 << (i / goarch.PtrSize)
 				scanSize += typ.Size_
@@ -2064,15 +2100,18 @@ func mallocgcSmallScanNoHeaderSC13(size uintptr, typ *_type, needzero bool) unsa
 
 		const elemsize = 176
 
-		scanSize := typ.PtrBytes
+		var scanSize uintptr
 		src := src0
 		if typ.Size_ == goarch.PtrSize {
 			src = (1 << (dataSize / goarch.PtrSize)) - 1
+
+			scanSize = dataSize
 		} else {
 
 			if doubleCheckHeapSetType && !asanenabled && dataSize%typ.Size_ != 0 {
 				throw("runtime: (*mspan).writeHeapBitsSmall: dataSize is not a multiple of typ.Size_")
 			}
+			scanSize = typ.PtrBytes
 			for i := typ.Size_; i < dataSize; i += typ.Size_ {
 				src |= src0 << (i / goarch.PtrSize)
 				scanSize += typ.Size_
@@ -2229,15 +2268,18 @@ func mallocgcSmallScanNoHeaderSC14(size uintptr, typ *_type, needzero bool) unsa
 
 		const elemsize = 192
 
-		scanSize := typ.PtrBytes
+		var scanSize uintptr
 		src := src0
 		if typ.Size_ == goarch.PtrSize {
 			src = (1 << (dataSize / goarch.PtrSize)) - 1
+
+			scanSize = dataSize
 		} else {
 
 			if doubleCheckHeapSetType && !asanenabled && dataSize%typ.Size_ != 0 {
 				throw("runtime: (*mspan).writeHeapBitsSmall: dataSize is not a multiple of typ.Size_")
 			}
+			scanSize = typ.PtrBytes
 			for i := typ.Size_; i < dataSize; i += typ.Size_ {
 				src |= src0 << (i / goarch.PtrSize)
 				scanSize += typ.Size_
@@ -2394,15 +2436,18 @@ func mallocgcSmallScanNoHeaderSC15(size uintptr, typ *_type, needzero bool) unsa
 
 		const elemsize = 208
 
-		scanSize := typ.PtrBytes
+		var scanSize uintptr
 		src := src0
 		if typ.Size_ == goarch.PtrSize {
 			src = (1 << (dataSize / goarch.PtrSize)) - 1
+
+			scanSize = dataSize
 		} else {
 
 			if doubleCheckHeapSetType && !asanenabled && dataSize%typ.Size_ != 0 {
 				throw("runtime: (*mspan).writeHeapBitsSmall: dataSize is not a multiple of typ.Size_")
 			}
+			scanSize = typ.PtrBytes
 			for i := typ.Size_; i < dataSize; i += typ.Size_ {
 				src |= src0 << (i / goarch.PtrSize)
 				scanSize += typ.Size_
@@ -2559,15 +2604,18 @@ func mallocgcSmallScanNoHeaderSC16(size uintptr, typ *_type, needzero bool) unsa
 
 		const elemsize = 224
 
-		scanSize := typ.PtrBytes
+		var scanSize uintptr
 		src := src0
 		if typ.Size_ == goarch.PtrSize {
 			src = (1 << (dataSize / goarch.PtrSize)) - 1
+
+			scanSize = dataSize
 		} else {
 
 			if doubleCheckHeapSetType && !asanenabled && dataSize%typ.Size_ != 0 {
 				throw("runtime: (*mspan).writeHeapBitsSmall: dataSize is not a multiple of typ.Size_")
 			}
+			scanSize = typ.PtrBytes
 			for i := typ.Size_; i < dataSize; i += typ.Size_ {
 				src |= src0 << (i / goarch.PtrSize)
 				scanSize += typ.Size_
@@ -2724,15 +2772,18 @@ func mallocgcSmallScanNoHeaderSC17(size uintptr, typ *_type, needzero bool) unsa
 
 		const elemsize = 240
 
-		scanSize := typ.PtrBytes
+		var scanSize uintptr
 		src := src0
 		if typ.Size_ == goarch.PtrSize {
 			src = (1 << (dataSize / goarch.PtrSize)) - 1
+
+			scanSize = dataSize
 		} else {
 
 			if doubleCheckHeapSetType && !asanenabled && dataSize%typ.Size_ != 0 {
 				throw("runtime: (*mspan).writeHeapBitsSmall: dataSize is not a multiple of typ.Size_")
 			}
+			scanSize = typ.PtrBytes
 			for i := typ.Size_; i < dataSize; i += typ.Size_ {
 				src |= src0 << (i / goarch.PtrSize)
 				scanSize += typ.Size_
@@ -2889,15 +2940,18 @@ func mallocgcSmallScanNoHeaderSC18(size uintptr, typ *_type, needzero bool) unsa
 
 		const elemsize = 256
 
-		scanSize := typ.PtrBytes
+		var scanSize uintptr
 		src := src0
 		if typ.Size_ == goarch.PtrSize {
 			src = (1 << (dataSize / goarch.PtrSize)) - 1
+
+			scanSize = dataSize
 		} else {
 
 			if doubleCheckHeapSetType && !asanenabled && dataSize%typ.Size_ != 0 {
 				throw("runtime: (*mspan).writeHeapBitsSmall: dataSize is not a multiple of typ.Size_")
 			}
+			scanSize = typ.PtrBytes
 			for i := typ.Size_; i < dataSize; i += typ.Size_ {
 				src |= src0 << (i / goarch.PtrSize)
 				scanSize += typ.Size_
@@ -3054,15 +3108,18 @@ func mallocgcSmallScanNoHeaderSC19(size uintptr, typ *_type, needzero bool) unsa
 
 		const elemsize = 288
 
-		scanSize := typ.PtrBytes
+		var scanSize uintptr
 		src := src0
 		if typ.Size_ == goarch.PtrSize {
 			src = (1 << (dataSize / goarch.PtrSize)) - 1
+
+			scanSize = dataSize
 		} else {
 
 			if doubleCheckHeapSetType && !asanenabled && dataSize%typ.Size_ != 0 {
 				throw("runtime: (*mspan).writeHeapBitsSmall: dataSize is not a multiple of typ.Size_")
 			}
+			scanSize = typ.PtrBytes
 			for i := typ.Size_; i < dataSize; i += typ.Size_ {
 				src |= src0 << (i / goarch.PtrSize)
 				scanSize += typ.Size_
@@ -3219,15 +3276,18 @@ func mallocgcSmallScanNoHeaderSC20(size uintptr, typ *_type, needzero bool) unsa
 
 		const elemsize = 320
 
-		scanSize := typ.PtrBytes
+		var scanSize uintptr
 		src := src0
 		if typ.Size_ == goarch.PtrSize {
 			src = (1 << (dataSize / goarch.PtrSize)) - 1
+
+			scanSize = dataSize
 		} else {
 
 			if doubleCheckHeapSetType && !asanenabled && dataSize%typ.Size_ != 0 {
 				throw("runtime: (*mspan).writeHeapBitsSmall: dataSize is not a multiple of typ.Size_")
 			}
+			scanSize = typ.PtrBytes
 			for i := typ.Size_; i < dataSize; i += typ.Size_ {
 				src |= src0 << (i / goarch.PtrSize)
 				scanSize += typ.Size_
@@ -3384,15 +3444,18 @@ func mallocgcSmallScanNoHeaderSC21(size uintptr, typ *_type, needzero bool) unsa
 
 		const elemsize = 352
 
-		scanSize := typ.PtrBytes
+		var scanSize uintptr
 		src := src0
 		if typ.Size_ == goarch.PtrSize {
 			src = (1 << (dataSize / goarch.PtrSize)) - 1
+
+			scanSize = dataSize
 		} else {
 
 			if doubleCheckHeapSetType && !asanenabled && dataSize%typ.Size_ != 0 {
 				throw("runtime: (*mspan).writeHeapBitsSmall: dataSize is not a multiple of typ.Size_")
 			}
+			scanSize = typ.PtrBytes
 			for i := typ.Size_; i < dataSize; i += typ.Size_ {
 				src |= src0 << (i / goarch.PtrSize)
 				scanSize += typ.Size_
@@ -3549,15 +3612,18 @@ func mallocgcSmallScanNoHeaderSC22(size uintptr, typ *_type, needzero bool) unsa
 
 		const elemsize = 384
 
-		scanSize := typ.PtrBytes
+		var scanSize uintptr
 		src := src0
 		if typ.Size_ == goarch.PtrSize {
 			src = (1 << (dataSize / goarch.PtrSize)) - 1
+
+			scanSize = dataSize
 		} else {
 
 			if doubleCheckHeapSetType && !asanenabled && dataSize%typ.Size_ != 0 {
 				throw("runtime: (*mspan).writeHeapBitsSmall: dataSize is not a multiple of typ.Size_")
 			}
+			scanSize = typ.PtrBytes
 			for i := typ.Size_; i < dataSize; i += typ.Size_ {
 				src |= src0 << (i / goarch.PtrSize)
 				scanSize += typ.Size_
@@ -3714,15 +3780,18 @@ func mallocgcSmallScanNoHeaderSC23(size uintptr, typ *_type, needzero bool) unsa
 
 		const elemsize = 416
 
-		scanSize := typ.PtrBytes
+		var scanSize uintptr
 		src := src0
 		if typ.Size_ == goarch.PtrSize {
 			src = (1 << (dataSize / goarch.PtrSize)) - 1
+
+			scanSize = dataSize
 		} else {
 
 			if doubleCheckHeapSetType && !asanenabled && dataSize%typ.Size_ != 0 {
 				throw("runtime: (*mspan).writeHeapBitsSmall: dataSize is not a multiple of typ.Size_")
 			}
+			scanSize = typ.PtrBytes
 			for i := typ.Size_; i < dataSize; i += typ.Size_ {
 				src |= src0 << (i / goarch.PtrSize)
 				scanSize += typ.Size_
@@ -3879,15 +3948,18 @@ func mallocgcSmallScanNoHeaderSC24(size uintptr, typ *_type, needzero bool) unsa
 
 		const elemsize = 448
 
-		scanSize := typ.PtrBytes
+		var scanSize uintptr
 		src := src0
 		if typ.Size_ == goarch.PtrSize {
 			src = (1 << (dataSize / goarch.PtrSize)) - 1
+
+			scanSize = dataSize
 		} else {
 
 			if doubleCheckHeapSetType && !asanenabled && dataSize%typ.Size_ != 0 {
 				throw("runtime: (*mspan).writeHeapBitsSmall: dataSize is not a multiple of typ.Size_")
 			}
+			scanSize = typ.PtrBytes
 			for i := typ.Size_; i < dataSize; i += typ.Size_ {
 				src |= src0 << (i / goarch.PtrSize)
 				scanSize += typ.Size_
@@ -4044,15 +4116,18 @@ func mallocgcSmallScanNoHeaderSC25(size uintptr, typ *_type, needzero bool) unsa
 
 		const elemsize = 480
 
-		scanSize := typ.PtrBytes
+		var scanSize uintptr
 		src := src0
 		if typ.Size_ == goarch.PtrSize {
 			src = (1 << (dataSize / goarch.PtrSize)) - 1
+
+			scanSize = dataSize
 		} else {
 
 			if doubleCheckHeapSetType && !asanenabled && dataSize%typ.Size_ != 0 {
 				throw("runtime: (*mspan).writeHeapBitsSmall: dataSize is not a multiple of typ.Size_")
 			}
+			scanSize = typ.PtrBytes
 			for i := typ.Size_; i < dataSize; i += typ.Size_ {
 				src |= src0 << (i / goarch.PtrSize)
 				scanSize += typ.Size_
@@ -4209,15 +4284,18 @@ func mallocgcSmallScanNoHeaderSC26(size uintptr, typ *_type, needzero bool) unsa
 
 		const elemsize = 512
 
-		scanSize := typ.PtrBytes
+		var scanSize uintptr
 		src := src0
 		if typ.Size_ == goarch.PtrSize {
 			src = (1 << (dataSize / goarch.PtrSize)) - 1
+
+			scanSize = dataSize
 		} else {
 
 			if doubleCheckHeapSetType && !asanenabled && dataSize%typ.Size_ != 0 {
 				throw("runtime: (*mspan).writeHeapBitsSmall: dataSize is not a multiple of typ.Size_")
 			}
+			scanSize = typ.PtrBytes
 			for i := typ.Size_; i < dataSize; i += typ.Size_ {
 				src |= src0 << (i / goarch.PtrSize)
 				scanSize += typ.Size_
@@ -4300,7 +4378,7 @@ func mallocgcSmallScanNoHeaderSC26(size uintptr, typ *_type, needzero bool) unsa
 	return x
 }
 
-func mallocTiny1(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
+func mallocgcTinySize1(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 
 	gp := getg()
 	if goexperiment.RuntimeSecret && gp.secret > 0 {
@@ -4456,7 +4534,7 @@ func mallocTiny1(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 	return x
 }
 
-func mallocTiny2(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
+func mallocgcTinySize2(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 
 	gp := getg()
 	if goexperiment.RuntimeSecret && gp.secret > 0 {
@@ -4612,7 +4690,7 @@ func mallocTiny2(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 	return x
 }
 
-func mallocTiny3(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
+func mallocgcTinySize3(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 
 	gp := getg()
 	if goexperiment.RuntimeSecret && gp.secret > 0 {
@@ -4768,7 +4846,7 @@ func mallocTiny3(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 	return x
 }
 
-func mallocTiny4(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
+func mallocgcTinySize4(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 
 	gp := getg()
 	if goexperiment.RuntimeSecret && gp.secret > 0 {
@@ -4924,7 +5002,7 @@ func mallocTiny4(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 	return x
 }
 
-func mallocTiny5(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
+func mallocgcTinySize5(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 
 	gp := getg()
 	if goexperiment.RuntimeSecret && gp.secret > 0 {
@@ -5080,7 +5158,7 @@ func mallocTiny5(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 	return x
 }
 
-func mallocTiny6(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
+func mallocgcTinySize6(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 
 	gp := getg()
 	if goexperiment.RuntimeSecret && gp.secret > 0 {
@@ -5236,7 +5314,7 @@ func mallocTiny6(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 	return x
 }
 
-func mallocTiny7(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
+func mallocgcTinySize7(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 
 	gp := getg()
 	if goexperiment.RuntimeSecret && gp.secret > 0 {
@@ -5392,7 +5470,7 @@ func mallocTiny7(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 	return x
 }
 
-func mallocTiny8(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
+func mallocgcTinySize8(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 
 	gp := getg()
 	if goexperiment.RuntimeSecret && gp.secret > 0 {
@@ -5548,7 +5626,7 @@ func mallocTiny8(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 	return x
 }
 
-func mallocTiny9(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
+func mallocgcTinySize9(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 
 	gp := getg()
 	if goexperiment.RuntimeSecret && gp.secret > 0 {
@@ -5704,7 +5782,7 @@ func mallocTiny9(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 	return x
 }
 
-func mallocTiny10(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
+func mallocgcTinySize10(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 
 	gp := getg()
 	if goexperiment.RuntimeSecret && gp.secret > 0 {
@@ -5860,7 +5938,7 @@ func mallocTiny10(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 	return x
 }
 
-func mallocTiny11(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
+func mallocgcTinySize11(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 
 	gp := getg()
 	if goexperiment.RuntimeSecret && gp.secret > 0 {
@@ -6016,7 +6094,7 @@ func mallocTiny11(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 	return x
 }
 
-func mallocTiny12(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
+func mallocgcTinySize12(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 
 	gp := getg()
 	if goexperiment.RuntimeSecret && gp.secret > 0 {
@@ -6172,7 +6250,7 @@ func mallocTiny12(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 	return x
 }
 
-func mallocTiny13(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
+func mallocgcTinySize13(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 
 	gp := getg()
 	if goexperiment.RuntimeSecret && gp.secret > 0 {
@@ -6328,7 +6406,7 @@ func mallocTiny13(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 	return x
 }
 
-func mallocTiny14(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
+func mallocgcTinySize14(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 
 	gp := getg()
 	if goexperiment.RuntimeSecret && gp.secret > 0 {
@@ -6484,7 +6562,7 @@ func mallocTiny14(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 	return x
 }
 
-func mallocTiny15(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
+func mallocgcTinySize15(size uintptr, typ *_type, needzero bool) unsafe.Pointer {
 
 	gp := getg()
 	if goexperiment.RuntimeSecret && gp.secret > 0 {

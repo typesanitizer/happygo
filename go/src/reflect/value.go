@@ -1288,9 +1288,10 @@ func (v Value) Field(i int) Value {
 		// bunch of zero-sized fields. We must return the zero-sized
 		// fields indirectly, as only ptr-shaped things can be direct.
 		// See issue 74935.
-		// We use nil instead of v.ptr as it doesn't matter and
+		// We use &zeroVal[0] instead of v.ptr as it doesn't matter and
 		// we can avoid pinning a possibly now-unused object.
-		return Value{typ, nil, fl | flagIndir}
+		// Don't use nil, see issue 77779.
+		return Value{typ, unsafe.Pointer(&zeroVal[0]), fl | flagIndir}
 	}
 
 	// Either flagIndir is set and v.ptr points at struct,
@@ -3404,7 +3405,7 @@ func convertOp(dst, src *abi.Type) func(Value, Type) Value {
 		}
 
 	case String:
-		if dst.Kind() == abi.Slice && pkgPathFor(dst.Elem()) == "" {
+		if dst.Kind() == abi.Slice {
 			switch Kind(dst.Elem().Kind()) {
 			case Uint8:
 				return cvtStringBytes
@@ -3414,7 +3415,7 @@ func convertOp(dst, src *abi.Type) func(Value, Type) Value {
 		}
 
 	case Slice:
-		if dst.Kind() == abi.String && pkgPathFor(src.Elem()) == "" {
+		if dst.Kind() == abi.String {
 			switch Kind(src.Elem().Kind()) {
 			case Uint8:
 				return cvtBytesString
