@@ -929,7 +929,30 @@ func ParseQuery(query string) (Values, error) {
 	return m, err
 }
 
+var urlmaxqueryparams = godebug.New("urlmaxqueryparams")
+
+const defaultMaxParams = 10000
+
+func urlParamsWithinMax(params int) bool {
+	withinDefaultMax := params <= defaultMaxParams
+	if urlmaxqueryparams.Value() == "" {
+		return withinDefaultMax
+	}
+	customMax, err := strconv.Atoi(urlmaxqueryparams.Value())
+	if err != nil {
+		return withinDefaultMax
+	}
+	withinCustomMax := customMax == 0 || params < customMax
+	if withinDefaultMax != withinCustomMax {
+		urlmaxqueryparams.IncNonDefault()
+	}
+	return withinCustomMax
+}
+
 func parseQuery(m Values, query string) (err error) {
+	if !urlParamsWithinMax(strings.Count(query, "&") + 1) {
+		return errors.New("number of URL query parameters exceeded limit")
+	}
 	for query != "" {
 		var key string
 		key, query, _ = strings.Cut(query, "&")
@@ -1298,4 +1321,17 @@ func JoinPath(base string, elem ...string) (result string, err error) {
 		return "", err
 	}
 	return res.String(), nil
+}
+
+// Clone creates a deep copy of the fields of the subject [URL].
+func (u *URL) Clone() *URL {
+	if u == nil {
+		return nil
+	}
+
+	uc := new(*u)
+	if u.User != nil {
+		uc.User = new(*u.User)
+	}
+	return uc
 }

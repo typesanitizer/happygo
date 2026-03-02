@@ -446,6 +446,11 @@ func (check *Checker) collectObjects() {
 					if recv, _ := base.(*ast.Ident); recv != nil && name != "_" {
 						methods = append(methods, methodInfo{obj, ptr, recv})
 					}
+					// methods cannot have type parameters for now
+					if d.decl.Type.TypeParams.NumFields() != 0 {
+						check.softErrorf(d.decl.Type.TypeParams.List[0], InvalidMethodTypeParams, "method %s must have no type parameters", name)
+						hasTParamError = true
+					}
 					check.recordDef(d.decl.Name, obj)
 				}
 				_ = d.decl.Type.TypeParams.NumFields() != 0 && !hasTParamError && check.verifyVersionf(d.decl.Type.TypeParams.List[0], go1_18, "type parameter")
@@ -641,13 +646,12 @@ func (check *Checker) packageObjects() {
 		}
 	}
 
-	if false && check.conf._EnableAlias {
-		// With Alias nodes we can process declarations in any order.
+	if false {
+		// TODO: determine if we can enable this code now or
+		//       if there are still problems with cycles and
+		//       aliases.
 		//
-		// TODO(adonovan): unfortunately, Alias nodes
-		// (GODEBUG=gotypesalias=1) don't entirely resolve
-		// problems with cycles. For example, in
-		// GOROOT/test/typeparam/issue50259.go,
+		// For example, in GOROOT/test/typeparam/issue50259.go,
 		//
 		// 	type T[_ any] struct{}
 		// 	type A T[B]
@@ -662,7 +666,7 @@ func (check *Checker) packageObjects() {
 			check.objDecl(obj)
 		}
 	} else {
-		// Without Alias nodes, we process non-alias type declarations first, followed by
+		// To avoid problems with cycles, we process non-alias type declarations first, followed by
 		// alias declarations, and then everything else. This appears to avoid most situations
 		// where the type of an alias is needed before it is available.
 		// There may still be cases where this is not good enough (see also go.dev/issue/25838).
