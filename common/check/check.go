@@ -54,6 +54,46 @@ func (h Harness) NoErrorf(err error, msg string, args ...any) {
 	}
 }
 
+// Logf logs a message via the underlying testing.T.
+func (h Harness) Logf(msg string, args ...any) {
+	h.t.Helper()
+	h.t.Logf(msg, args...)
+}
+
+// AssertSame compares want and got using cmp.Diff and fails with a diff if they differ.
+func AssertSame[T any](h Harness, want, got T, what string) {
+	h.t.Helper()
+	if diff := cmp.Diff(want, got); diff != "" {
+		h.t.Fatalf("%s mismatch (-want +got):\n%s", what, diff)
+	}
+}
+
+// WriteTree creates files and directories under root from a map.
+// Keys ending in "/" create directories (value must be "").
+// Other keys create files with the value as content.
+// All paths must be relative and stay within root.
+func (h Harness) WriteTree(root string, tree map[string]string) {
+	h.t.Helper()
+	for path, content := range tree {
+		h.Assertf(pathx.LexicallyContains(root, path), "path %q escapes root %q", path, root)
+		full := filepath.Join(root, path)
+		if strings.HasSuffix(path, "/") {
+			h.Assertf(content == "", "directory path %q must have empty content", path)
+			h.NoErrorf(os.MkdirAll(full, 0o755), "creating directory %s", full)
+			continue
+		}
+		h.NoErrorf(os.MkdirAll(filepath.Dir(full), 0o755), "creating parent directory for %s", full)
+		h.NoErrorf(os.WriteFile(full, []byte(content), 0o644), "writing file %s", full)
+	}
+}
+
+// WriteFile writes a single file, creating parent directories as needed.
+func (h Harness) WriteFile(path string, content string) {
+	h.t.Helper()
+	dir, file := filepath.Split(path)
+	h.WriteTree(dir, map[string]string{file: content})
+}
+
 // Snapshot holds a path for file-based snapshot comparison.
 type Snapshot struct {
 	harness Harness

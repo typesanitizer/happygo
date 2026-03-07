@@ -19,6 +19,20 @@ If you need to create more bundles, define a dedicated type by
 embedding the relevant dependencies and pass that around, instead
 of repeating several arguments at multiple sites in a call chain.
 
+## Enum-like constants use `Type_Value` naming
+
+```go
+type ListProvenance int
+
+const (
+	ListProvenance_All        ListProvenance = iota + 1
+	ListProvenance_FirstParty
+	ListProvenance_Forked
+)
+```
+
+Start at `iota + 1` so that the zero value is distinct from all valid cases.
+
 ## Optional customization points should go in a dedicated Options struct
 
 ```go

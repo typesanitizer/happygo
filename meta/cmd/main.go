@@ -66,6 +66,47 @@ func main() {
 					})
 				},
 			},
+			{
+				Name:  "list",
+				Usage: "list workspace items",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name: "type", Required: true,
+						Usage: "item type: go-module",
+					},
+					&cli.StringFlag{
+						Name:  "provenance",
+						Usage: "provenance filter: first-party, forked (default: all)",
+					},
+				},
+				Action: func(_ context.Context, cmd *cli.Command) error {
+					ws, err := getWorkspace()
+					if err != nil {
+						return err
+					}
+					var type_ ListType
+					switch cmd.String("type") {
+					case "go-module":
+						type_ = ListType_GoModules
+					default:
+						return errorx.Newf("nostack",
+							"unknown --type %q, want go-module", cmd.String("type"))
+					}
+					provenance := ListProvenance_All
+					if cmd.IsSet("provenance") {
+						switch cmd.String("provenance") {
+						case "first-party":
+							provenance = ListProvenance_FirstParty
+						case "forked":
+							provenance = ListProvenance_Forked
+						default:
+							return errorx.Newf("nostack",
+								"unknown --provenance %q, want first-party|forked", cmd.String("provenance"))
+						}
+					}
+					return ws.List(logger, os.Stdout, ListOptions{Type: type_, Provenance: provenance})
+				},
+			},
 		},
 	}
 
