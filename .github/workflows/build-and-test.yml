@@ -87,6 +87,51 @@ jobs:
           export PATH="$GOROOT/bin:$PATH"
           go test -C tools ./...
 
+  test-first-party:
+    name: go test (first-party)
+    # Only test on Ubuntu since currently these are mostly meant
+    # to be run in CI, and macOS runners are more limited; don't
+    # want actual macOS testing runners to be occupied by these tests.
+    if: inputs.os == 'ubuntu-latest'
+    runs-on: ${{ inputs.os }}
+    needs: build-head
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-head-toolchain
+        with:
+          os: ${{ inputs.os }}
+      - name: Test
+        shell: bash
+        run: |
+          export GOROOT="$PWD/go"
+          export PATH="$GOROOT/bin:$PATH"
+          patterns=$(go run ./meta/cmd list --type=go-module --provenance=first-party | sed 's|.*|./&/...|')
+          go test $patterns
+
+  lint-first-party:
+    name: golangci-lint (first-party)
+    # Only test on Ubuntu since currently these are mostly meant
+    # to be run in CI, and macOS runners are more limited; don't
+    # want actual macOS testing runners to be occupied by these tests.
+    if: inputs.os == 'ubuntu-latest'
+    runs-on: ${{ inputs.os }}
+    needs: build-head
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-head-toolchain
+        with:
+          os: ${{ inputs.os }}
+      - name: Lint
+        shell: bash
+        run: |
+          export GOROOT="$PWD/go"
+          export PATH="$GOROOT/bin:$PATH"
+          export CGO_ENABLED=0
+          patterns=$(go run ./meta/cmd list --type=go-module --provenance=first-party | sed 's|.*|./&/...|')
+          # Version is pinned via the tool dependency in common/go.mod;
+          # see NOTE(id: workspace-tool-directives).
+          go tool golangci-lint run $patterns
+
   test-delve:
     name: test-delve (${{ matrix.go-toolchain }})
     runs-on: ${{ inputs.os }}

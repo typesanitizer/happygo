@@ -1,0 +1,77 @@
+version: "2"
+
+linters:
+  enable:
+    - bodyclose
+    - depguard
+    - errcheck
+    - exhaustive
+    - exhaustruct
+    - exptostd
+    - forbidigo
+    - gochecksumtype
+    - importas
+    - ineffassign
+    - musttag
+    - paralleltest
+    - staticcheck
+    - unconvert
+    - unparam
+    - unused
+  exclusions:
+    rules:
+      # common/core is designed for dot-import usage.
+      - linters: [staticcheck]
+        text: "ST1001"
+        source: 'common/core'
+    # Upstream projects are excluded; linting only applies to our code.
+    # SYNC(id: linter-exclusions)
+    paths:
+      - ^go/
+      - ^tools/
+      - ^delve/
+  settings:
+    depguard:
+      rules:
+        # "Main" is the rule name; depguard requires at least one named rule.
+        Main:
+          list-mode: lax
+          deny:
+            - pkg: "errors"
+              desc: "use common/errorx instead of stdlib errors"
+            - pkg: "github.com/cockroachdb/errors"
+              desc: "use common/errorx instead of cockroachdb/errors directly"
+            - pkg: "log"
+              desc: "use common/logx instead of stdlib log"
+            - pkg: "log/slog"
+              desc: "use common/logx instead of log/slog"
+            - pkg: "github.com/charmbracelet/log"
+              desc: "use common/logx instead of charmbracelet/log directly"
+    importas:
+      no-unaliased: true
+      alias:
+        - pkg: github.com/typesanitizer/happygo/common/core
+          alias: .
+    exhaustruct:
+      # NOTE: Even with allow-empty-returns: false, exhaustruct unconditionally
+      # allows empty structs in error return statements (i.e. `return T{}, err`
+      # where err implements error). This is hardcoded with no toggle:
+      # https://github.com/GaijinEntertainment/go-exhaustruct/blob/237ddb3/analyzer/analyzer.go#L109-L112
+      exclude:
+        - ^github\.com/urfave/cli/v3\.(Command|FlagBase|StringFlag|BoolFlag)$
+    forbidigo:
+      forbid:
+        - pattern: ^fmt\.Errorf$
+          msg: use common/errorx instead of fmt.Errorf
+        - pattern: ^errors\.New$
+          msg: use common/errorx instead of errors.New
+        - pattern: ^fmt\.Print(f|ln)?$
+          msg: use common/logx instead of fmt.Print*
+        - pattern: ^log\.Print(f|ln)?$
+          msg: use common/logx instead of log.Print*
+        - pattern: ^print(ln)?$
+          msg: do not use builtin print/println
+        - pattern: ^t\.Errorf$
+          msg: use common/check Harness assertions instead of t.Errorf
+        - pattern: ^t\.Fatalf$
+          msg: use common/check Harness assertions instead of t.Fatalf
