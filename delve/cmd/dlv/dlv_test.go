@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-delve/delve/pkg/config"
 	"github.com/go-delve/delve/pkg/goversion"
 	protest "github.com/go-delve/delve/pkg/proc/test"
 	"github.com/go-delve/delve/pkg/terminal"
@@ -339,6 +340,10 @@ func TestGeneratedDoc(t *testing.T) {
 	commands.WriteMarkdown(&generatedBuf)
 	checkAutogenDoc(t, "Documentation/cli/README.md", "_scripts/gen-cli-docs.go", generatedBuf.Bytes())
 
+	generatedBuf.Reset()
+	config.WriteConfigDocumentation(&generatedBuf)
+	checkAutogenDoc(t, "Documentation/cli/config.md", "_scripts/gen-cli-docs.go", generatedBuf.Bytes())
+
 	// Checks gen-usage-docs.go
 	if runtime.GOARCH != "ppc64le" {
 		tempDir := t.TempDir()
@@ -449,7 +454,7 @@ func TestDAPCmd(t *testing.T) {
 	client.DisconnectRequest()
 	client.ExpectDisconnectResponse(t)
 	client.ExpectTerminatedEvent(t)
-	_, err = client.ReadMessage()
+	_, err = client.ReadMessage(t)
 	if runtime.GOOS == "windows" {
 		if err == nil {
 			t.Errorf("got %q, want non-nil\n", err)
@@ -515,7 +520,7 @@ func TestRemoteDAPClient(t *testing.T) {
 	client.ExpectOutputEventDetaching(t)
 	client.ExpectDisconnectResponse(t)
 	client.ExpectTerminatedEvent(t)
-	if _, err := client.ReadMessage(); err == nil {
+	if _, err := client.ReadMessage(t); err == nil {
 		t.Error("expected read error upon shutdown")
 	}
 	client.Close()
@@ -649,7 +654,7 @@ func TestRemoteDAPClientAfterContinue(t *testing.T) {
 	c.ExpectOutputEventDetachingKill(t)
 	c.ExpectDisconnectResponse(t)
 	c.ExpectTerminatedEvent(t)
-	if _, err := c.ReadMessage(); err == nil {
+	if _, err := c.ReadMessage(t); err == nil {
 		t.Error("expected read error upon shutdown")
 	}
 	c.Close()
@@ -1348,6 +1353,9 @@ func TestVersion(t *testing.T) {
 
 func TestStaticcheck(t *testing.T) {
 	t.Parallel()
+	if ver, ok := goversion.Parse(runtime.Version()); ok && ver.IsDevelBuild() {
+		t.Skip("staticcheck output is not stable on development versions of Go")
+	}
 	_, err := exec.LookPath("staticcheck")
 	if err != nil {
 		t.Skip("staticcheck not installed")

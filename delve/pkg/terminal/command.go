@@ -543,30 +543,10 @@ Saves the configuration file to disk, overwriting the current configuration file
 
 	config <parameter> <value>
 
-Changes the value of a configuration parameter.
+Changes the value of simple configuration parameters.
 
-	config substitute-path <from> <to>
-	config substitute-path <from>
-	config substitute-path -clear
-	config substitute-path -guess
-
-Adds or removes a path substitution rule, if -clear is used all
-substitute-path rules are removed. Without arguments shows the current list
-of substitute-path rules.
-The -guess option causes Delve to try to guess your substitute-path
-configuration automatically.
-See also Documentation/cli/substitutepath.md for how the rules are applied.
-
-	config alias <command> <alias>
-	config alias <alias>
-
-Defines <alias> as an alias to <command> or removes an alias.
-
-	config debug-info-directories -add <path>
-	config debug-info-directories -rm <path>
-	config debug-info-directories -clear
-
-Adds, removes or clears debug-info-directories.`},
+Use 'help config <parameter>' for more informations on specific configuration options.
+`},
 
 		{aliases: []string{"edit", "ed"}, cmdFn: edit, helpMsg: `Open where you are in $DELVE_EDITOR or $EDITOR
 
@@ -776,6 +756,17 @@ func nullCommand(t *Term, ctx callContext, args string) error {
 
 func (c *Commands) help(t *Term, ctx callContext, args string) error {
 	if args != "" {
+		if p1, p2, ok := strings.Cut(args, " "); ok && p1 == "config" {
+			if !configureValidParameter(t, p2) {
+				return errors.New("unknown config parameter")
+			}
+			if doc := config.Documentation[p2]; doc != "" {
+				fmt.Fprintln(t.stdout, doc)
+				return nil
+			}
+			return errors.New("not documented")
+		}
+
 		for _, cmd := range c.cmds {
 			if slices.Contains(cmd.aliases, args) {
 				fmt.Fprintln(t.stdout, cmd.helpMsg)
@@ -889,7 +880,7 @@ func (c *Commands) printGoroutines(t *Term, ctx callContext, indent string, gs [
 			writeGoroutineLabels(t.stdout, g, indent+"\t")
 		}
 		if flags&api.PrintGoroutinesStack != 0 {
-			stack, err := t.client.Stacktrace(g.ID, depth, 0, nil)
+			stack, err := t.client.Stacktrace(g.ID, depth, 0, 0, nil)
 			if err != nil {
 				return err
 			}
@@ -1043,11 +1034,11 @@ func (c *Commands) frameCommand(t *Term, ctx callContext, argstr string, directi
 	if frame < 0 {
 		return fmt.Errorf("Invalid frame %d", frame)
 	}
-	stack, err := t.client.Stacktrace(ctx.Scope.GoroutineID, frame, 0, nil)
+	stack, err := t.client.Stacktrace(ctx.Scope.GoroutineID, frame, frame, 0, nil)
 	if err != nil {
 		return err
 	}
-	if frame >= len(stack) {
+	if len(stack) == 0 {
 		return fmt.Errorf("Invalid frame %d", frame)
 	}
 	c.frame = frame
@@ -1056,7 +1047,7 @@ func (c *Commands) frameCommand(t *Term, ctx callContext, argstr string, directi
 		return err
 	}
 	printcontext(t, state)
-	th := stack[frame]
+	th := stack[0]
 	fmt.Fprintf(t.stdout, "Frame %d: %s:%d (PC: %x)\n", frame, t.formatPath(th.File), th.Line, th.PC)
 	printfile(t, th.File, th.Line, true)
 	return nil
@@ -2484,7 +2475,7 @@ func stackCommand(t *Term, ctx callContext, args string) error {
 	if sa.full {
 		cfg = &ShortLoadConfig
 	}
-	stack, err := t.client.Stacktrace(ctx.Scope.GoroutineID, sa.depth, sa.opts, cfg)
+	stack, err := t.client.Stacktrace(ctx.Scope.GoroutineID, sa.depth, 0, sa.opts, cfg)
 	if err != nil {
 		return err
 	}
@@ -2605,14 +2596,14 @@ func getLocation(t *Term, ctx callContext, args string, showContext bool) (file 
 		return state.CurrentThread.File, state.CurrentThread.Line, true, nil
 
 	case len(args) == 0 && ctx.scoped():
-		locs, err := t.client.Stacktrace(ctx.Scope.GoroutineID, ctx.Scope.Frame, 0, nil)
+		locs, err := t.client.Stacktrace(ctx.Scope.GoroutineID, ctx.Scope.Frame, ctx.Scope.Frame, 0, nil)
 		if err != nil {
 			return "", 0, false, err
 		}
-		if ctx.Scope.Frame >= len(locs) {
+		if len(locs) == 0 {
 			return "", 0, false, fmt.Errorf("Frame %d does not exist in goroutine %d", ctx.Scope.Frame, ctx.Scope.GoroutineID)
 		}
-		loc := locs[ctx.Scope.Frame]
+		loc := locs[0]
 		gid := ctx.Scope.GoroutineID
 		if gid < 0 {
 			state, err := t.client.GetState()
