@@ -18,6 +18,11 @@ type RunSyncBranchOptions struct {
 	Persist bool
 }
 
+type remoteRef struct {
+	Name string
+	SHA  string
+}
+
 func (ws Workspace) runSyncBranch(ctx logx.LogCtx, projects []string, options RunSyncBranchOptions) (err error) {
 	assert.Precondition(len(projects) > 0, "must sync 1+ projects")
 	baseBranch := options.Base.ValueOr("main")
@@ -63,9 +68,6 @@ func runSyncBranchProject(
 	if err := deleteLocalBranchIfPresent(ctx, worktreeDir, syncBranch); err != nil {
 		return errorx.Wrapf("nostack", err, "delete local branch %q", syncBranch)
 	}
-	if err := fetchRemoteBranchIfPresent(ctx, worktreeDir, syncBranch); err != nil {
-		return errorx.Wrapf("nostack", err, "fetch remote branch %q", syncBranch)
-	}
 	checkoutCmd := cmdx.New("git", "checkout", "-B", syncBranch).In(worktreeDir)
 	if _, err := checkoutCmd.Run(ctx, cmdx.RunOptionsDefault()); err != nil {
 		return err
@@ -78,9 +80,14 @@ func runSyncBranchProject(
 		return nil
 	}
 
+	remoteHead, err := findRemoteBranchHeadRef(ctx, worktreeDir, syncBranch)
+	if err != nil {
+		return errorx.Wrapf("nostack", err, "find remote head ref for %q", syncBranch)
+	}
+	forceWithLeaseArg := "--force-with-lease=" + formatLease(syncBranch, remoteHead)
 	ctx.Info("pushing sync branch", "project", project, "branch", syncBranch)
 	// See SYNC(id: gha-permissions).
-	pushCmd := cmdx.New("git", "push", "--force-with-lease", "origin", syncBranch+":"+syncBranch).
+	pushCmd := cmdx.New("git", "push", forceWithLeaseArg, "origin", syncBranch+":"+syncBranch).
 		In(worktreeDir)
 	if _, err := pushCmd.Run(ctx, cmdx.RunOptionsDefault()); err != nil {
 		return err
@@ -110,18 +117,52 @@ func deleteLocalBranchIfPresent(ctx logx.LogCtx, worktreeDir string, branch stri
 	return err
 }
 
-func fetchRemoteBranchIfPresent(ctx logx.LogCtx, worktreeDir string, branch string) error {
-	lsRemoteCmd := cmdx.New("git", "ls-remote", "--heads", "origin", branch).In(worktreeDir)
+func findRemoteBranchHeadRef(
+	ctx logx.LogCtx, worktreeDir string, branch string,
+) (Option[remoteRef], error) {
+	assert.Precondition(branch != "", "branch must be non-empty")
+
+	branchRef := "refs/heads/" + branch
+	lsRemoteCmd := cmdx.New("git", "ls-remote", "--heads", "origin", branchRef).In(worktreeDir)
 	out, err := lsRemoteCmd.Run(ctx, cmdx.RunOptions{CaptureStdout: true})
 	if err != nil {
-		return err
+		return None[remoteRef](), err
 	}
-	if strings.TrimSpace(out) == "" {
-		return nil
+	return parseSingleRemoteRef(branchRef, out)
+}
+
+func parseSingleRemoteRef(wantRef string, lsRemoteOutput string) (Option[remoteRef], error) {
+	assert.Precondition(wantRef != "", "wantRef must be non-empty")
+	out := strings.TrimSpace(lsRemoteOutput)
+	if out == "" {
+		return None[remoteRef](), nil
 	}
-	fetchCmd := cmdx.New("git", "fetch", "origin", branch).In(worktreeDir)
-	_, err = fetchCmd.Run(ctx, cmdx.RunOptionsDefault())
-	return err
+	lines := strings.Split(out, "\n")
+	if len(lines) != 1 {
+		return None[remoteRef](), errorx.Newf("nostack",
+			"expected at most 1 ls-remote line for %q, got %d", wantRef, len(lines))
+	}
+	fields := strings.Fields(lines[0])
+	if len(fields) != 2 {
+		return None[remoteRef](), errorx.Newf("nostack",
+			"expected 2 fields in ls-remote output for %q, got %d: %q",
+			wantRef, len(fields), lines[0])
+	}
+	if fields[1] != wantRef {
+		return None[remoteRef](), errorx.Newf("nostack",
+			"expected ls-remote ref %q, got %q", wantRef, fields[1])
+	}
+	return Some(remoteRef{Name: fields[1], SHA: fields[0]}), nil
+}
+
+func formatLease(branch string, remoteHead Option[remoteRef]) string {
+	assert.Precondition(branch != "", "branch must be non-empty")
+	// Use the explicit <ref>:<expect> forms documented at:
+	// https://git-scm.com/docs/git-push#Documentation/git-push.txt---force-with-lease
+	if remoteRef, ok := remoteHead.Get(); ok {
+		return branch + ":" + remoteRef.SHA
+	}
+	return branch + ":"
 }
 
 func createSyncWorktree(
