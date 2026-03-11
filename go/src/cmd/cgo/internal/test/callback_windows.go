@@ -90,12 +90,6 @@ func testCallbackCallersSEH(t *testing.T) {
 			continue
 		}
 		fname := f.Name()
-		switch fname {
-		case "goCallback":
-			// TODO(qmuntal): investigate why this function doesn't appear
-			// when using the external linker.
-			continue
-		}
 		// In module mode, this package has a fully-qualified import path.
 		// Remove it if present.
 		fname = strings.TrimPrefix(fname, "cmd/cgo/internal/")
