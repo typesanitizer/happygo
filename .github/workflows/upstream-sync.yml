@@ -40,20 +40,34 @@ concurrency:
   cancel-in-progress: true
 
 # SYNC(id: gha-permissions)
-permissions:
-  # For git push in sync-branch (see sync_branch.go).
-  contents: write
-  # For gh pr create/edit/merge and gh label create/list in sync-pr (see sync_pr.go).
-  pull-requests: write
+# The mergebot has the following permissions:
+# - Read access to metadata
+# - Read and write access to code, issues, merge queues, and pull requests 
+#
+# So we need zero permissions on the normal GITHUB_TOKEN,
+# because we never use it.
+permissions: {}
 
 jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
+      # This step directly accesses the GitHub API, and does not
+      # use GITHUB_TOKEN.
+      # See https://github.com/actions/create-github-app-token#how-it-works
+      - name: Generate app token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.AEGIS_MERGEBOT_APP_CLIENT_ID }}
+          private-key: ${{ secrets.AEGIS_MERGEBOT_APP_PRIVATE_KEY }}
+
       - uses: actions/checkout@v6
         with:
           # Full history needed for git subtree operations.
           fetch-depth: 0
+          # Use app token so that pushes and PRs trigger downstream workflows.
+          token: ${{ steps.app-token.outputs.token }}
 
       - uses: actions/setup-go@v5
         with:
@@ -69,6 +83,7 @@ jobs:
       - name: Sync branches and PRs
         shell: python
         env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           DISPATCH_PROJECT: ${{ github.event.inputs.project }}
           DISPATCH_BASE: ${{ github.event.inputs.base }}
           DISPATCH_PUSH: ${{ github.event.inputs.push }}
