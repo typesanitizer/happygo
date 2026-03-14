@@ -55,6 +55,9 @@ package goexperiment
 //
 // If you change this struct definition, run "go generate".
 type Flags struct {
+	// HappyEnum enables support for sum types (aka enums) in happygo.
+	HappyEnum bool
+
 	FieldTrack        bool
 	PreemptibleLoops  bool
 	StaticLockRanking bool
