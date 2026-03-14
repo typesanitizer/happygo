@@ -6,11 +6,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/urfave/cli/v3"
+
 	"github.com/typesanitizer/happygo/common/collections"
 	. "github.com/typesanitizer/happygo/common/core"
 	"github.com/typesanitizer/happygo/common/errorx"
 	"github.com/typesanitizer/happygo/common/logx"
-	"github.com/urfave/cli/v3"
 )
 
 const syncBranchPrefix = "merge-bot/sync/"
@@ -21,7 +22,7 @@ func main() {
 	app := &cli.Command{
 		Name:  "meta",
 		Usage: "Perform workspace-related administrative tasks",
-		Commands: []*cli.Command{
+		Commands: append([]*cli.Command{
 			{
 				Name: "sync-branch",
 				Usage: "update and optionally push " + syncBranchPrefix +
@@ -105,12 +106,18 @@ func main() {
 					return ws.List(logger, os.Stdout, ListOptions{Type: type_, Provenance: provenance})
 				},
 			},
-		},
+		}, newAgentLoopCommands(logger, getWorkspace)...),
 	}
 
+	timeout := 5 * time.Minute
+	timeoutMessage := "command exceeded time limit of 5 minutes"
+	if len(os.Args) > 1 && (os.Args[1] == "agent-loop" || os.Args[1] == "agent-loop-inner") {
+		timeout = 24 * time.Hour
+		timeoutMessage = "command exceeded time limit of 24 hours"
+	}
 	ctx, cancel := context.WithTimeoutCause(
-		context.Background(), 5*time.Minute,
-		errorx.Newf("nostack", "command exceeded time limit of 5 minutes"),
+		context.Background(), timeout,
+		errorx.Newf("nostack", "%s", timeoutMessage),
 	)
 	defer cancel()
 	if err := app.Run(ctx, os.Args); err != nil {
