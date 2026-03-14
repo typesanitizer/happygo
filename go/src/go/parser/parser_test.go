@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"internal/parser_testcases"
 	"io/fs"
 	"reflect"
 	"strings"
@@ -154,7 +155,7 @@ func TestParseExpr(t *testing.T) {
 	}
 
 	// ParseExpr must not crash
-	for _, src := range valids {
+	for _, src := range parser_testcases.Valids() {
 		ParseExpr(src)
 	}
 }

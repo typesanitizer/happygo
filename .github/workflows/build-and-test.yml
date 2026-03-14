@@ -72,6 +72,24 @@ jobs:
           export PATH="$GOROOT/bin:$PATH"
           go tool dist test -run='^cmd'
 
+  fuzz-compile-types2:
+    name: fuzz-compile-types2
+    if: inputs.os == 'ubuntu-latest'
+    runs-on: ${{ inputs.os }}
+    needs: build-head
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-head-toolchain
+        with:
+          os: ${{ inputs.os }}
+      - name: Fuzz smoke test
+        shell: bash
+        run: |
+          export GOROOT="$PWD/go"
+          export PATH="$GOROOT/bin:$PATH"
+          go test -C go/src/cmd ./compile/internal/types2 -run '^FuzzTypeCheck$' -count=1
+          go test -C go/src/cmd ./compile/internal/types2 -run '^$' -fuzz '^FuzzTypeCheck$' -fuzztime=15s -parallel=1
+
   test-tools:
     runs-on: ${{ inputs.os }}
     needs: build-head
