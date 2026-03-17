@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"text/tabwriter"
 	"time"
@@ -43,6 +44,7 @@ import (
 
 var normalLoadConfig = proc.LoadConfig{true, 1, 64, 64, -1, 0}
 var testBackend, buildMode string
+var waitForInvocationID uint64
 
 func init() {
 	runtime.GOMAXPROCS(4)
@@ -5621,11 +5623,15 @@ func testWaitForSetup(t *testing.T, mu *sync.Mutex, started *bool) (*exec.Cmd, *
 	}
 	fixture := protest.BuildFixture(t, "loopprog", buildFlags)
 
-	// NOTE(happygo): Pass t.Name() as an argument to make the command line unique per test.
-	// This prevents WaitFor from matching stale processes from previous tests
-	// that may still be visible in Windows process snapshots.
-	uniqueArg := t.Name()
-	cmd := exec.Command(fixture.Path, uniqueArg)
+	waitForName := fixture.Path
+	cmdArgs := []string{}
+	if runtime.GOOS == "windows" && testBackend == "native" {
+		id := atomic.AddUint64(&waitForInvocationID, 1)
+		uniqueArg := fmt.Sprintf("%s-%d", t.Name(), id)
+		cmdArgs = append(cmdArgs, uniqueArg)
+		waitForName = fixture.Path + " " + uniqueArg
+	}
+	cmd := exec.Command(fixture.Path, cmdArgs...)
 
 	go func() {
 		time.Sleep(2 * time.Second)
@@ -5637,7 +5643,7 @@ func testWaitForSetup(t *testing.T, mu *sync.Mutex, started *bool) (*exec.Cmd, *
 		mu.Unlock()
 	}()
 
-	waitFor := &proc.WaitFor{Name: fixture.Path + " " + uniqueArg, Interval: 100 * time.Millisecond, Duration: 10 * time.Second}
+	waitFor := &proc.WaitFor{Name: waitForName, Interval: 100 * time.Millisecond, Duration: 10 * time.Second}
 
 	return cmd, waitFor, fixture.Path
 }
