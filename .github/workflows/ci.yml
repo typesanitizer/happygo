@@ -11,7 +11,7 @@ jobs:
     name: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [windows-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     uses: ./.github/workflows/build-and-test.yml
     with:
       os: ${{ matrix.os }}

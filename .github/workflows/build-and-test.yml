@@ -24,7 +24,6 @@ jobs:
           toolchain: head
 
   build-gotip:
-    if: false
     runs-on: ${{ inputs.os }}
     steps:
       # Sparse checkout: only fetch .github/ to access the action.
@@ -38,7 +37,6 @@ jobs:
           toolchain: gotip
 
   test-std:
-    if: false
     runs-on: ${{ inputs.os }}
     needs: build-head
     steps:
@@ -60,7 +58,6 @@ jobs:
           go tool dist test -run='!^cmd'
 
   test-cmd:
-    if: false
     runs-on: ${{ inputs.os }}
     needs: build-head
     steps:
@@ -76,7 +73,6 @@ jobs:
           go tool dist test -run='^cmd'
 
   test-tools:
-    if: false
     runs-on: ${{ inputs.os }}
     needs: build-head
     steps:
@@ -93,7 +89,10 @@ jobs:
 
   test-first-party:
     name: go test (first-party)
-    if: false
+    # Only test on Ubuntu since currently these are mostly meant
+    # to be run in CI, and macOS runners are more limited; don't
+    # want actual macOS testing runners to be occupied by these tests.
+    if: inputs.os == 'ubuntu-latest'
     runs-on: ${{ inputs.os }}
     needs: build-head
     steps:
@@ -111,7 +110,10 @@ jobs:
 
   lint-first-party:
     name: golangci-lint (first-party)
-    if: false
+    # Only test on Ubuntu since currently these are mostly meant
+    # to be run in CI, and macOS runners are more limited; don't
+    # want actual macOS testing runners to be occupied by these tests.
+    if: inputs.os == 'ubuntu-latest'
     runs-on: ${{ inputs.os }}
     needs: build-head
     steps:
@@ -133,15 +135,40 @@ jobs:
   test-delve:
     name: test-delve (${{ matrix.go-toolchain }})
     runs-on: ${{ inputs.os }}
-    needs: [build-head]
+    needs: [build-head, build-gotip]
+    continue-on-error: ${{ matrix.go-toolchain == 'gotip' }}
     strategy:
       matrix:
-        go-toolchain: [head]
+        go-toolchain: [head, stable, gotip]
     steps:
       - uses: actions/checkout@v6
+      # Stable Go is used only for fixture builds; capture its GOROOT before PATH changes.
+      - uses: actions/setup-go@v5
+        if: matrix.go-toolchain == 'stable'
+        with:
+          go-version: 1.25.x
+          # setup-go cache warns when GOCACHE is customized; we manage caching explicitly.
+          # See https://github.com/typesanitizer/happygo/actions/runs/20907489161/job/60063662688
+          cache: false
+      - name: Capture stable GOROOT
+        id: stable-goroot
+        if: matrix.go-toolchain == 'stable'
+        shell: bash
+        run: echo "path=$(go env GOROOT)" >> $GITHUB_OUTPUT
       - uses: ./.github/actions/setup-head-toolchain
         with:
           os: ${{ inputs.os }}
+      - uses: actions/download-artifact@v7
+        if: matrix.go-toolchain == 'gotip'
+        with:
+          name: go-gotip-${{ inputs.os }}
+          path: .
+      - name: Unpack toolchain (tar)
+        if: matrix.go-toolchain == 'gotip'
+        shell: bash
+        run: |
+          mkdir -p gotip
+          tar -xzf go-gotip-${{ inputs.os }}.tgz -p -C gotip
       # NOTE(id: delve-windows-test-dep-setup): Mirrors logic in delve/_scripts/test_windows.ps1.
       - name: Install procdump (windows)
         if: runner.os == 'Windows'
@@ -152,7 +179,15 @@ jobs:
           echo "$env:RUNNER_TOOL_CACHE\procdump" >> $env:GITHUB_PATH
       - name: Test
         shell: bash
+        env:
+          STABLE_GO_ROOT: ${{ steps.stable-goroot.outputs.path }}
         run: |
           export GOROOT="$PWD/go"
           export PATH="$GOROOT/bin:$PATH"
-          go test -C delve ./pkg/proc -run '^TestWaitFor$' -count=100
+          # Use a custom go tool when building fixtures for stable/gotip.
+          case "${{ matrix.go-toolchain }}" in
+            stable) export DELVE_TEST_GO="$STABLE_GO_ROOT/bin/go" ;;
+            gotip)  export DELVE_TEST_GO="$PWD/gotip/bin/go" ;;
+            head)   ;;
+          esac
+          go test -C delve ./...
