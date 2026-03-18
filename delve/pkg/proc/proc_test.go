@@ -5623,15 +5623,13 @@ func testWaitForSetup(t *testing.T, mu *sync.Mutex, started *bool) (*exec.Cmd, *
 	}
 	fixture := protest.BuildFixture(t, "loopprog", buildFlags)
 
-	waitForName := fixture.Path
-	cmdArgs := []string{}
-	if runtime.GOOS == "windows" && testBackend == "native" {
-		id := atomic.AddUint64(&waitForInvocationID, 1)
-		uniqueArg := fmt.Sprintf("%s-%d", t.Name(), id)
-		cmdArgs = append(cmdArgs, uniqueArg)
-		waitForName = fixture.Path + " " + uniqueArg
-	}
-	cmd := exec.Command(fixture.Path, cmdArgs...)
+	// NOTE(id: delve-testwaitfor-unique-invocation-id): go test -count repeats
+	// reuse t.Name(). Add a per-invocation suffix so waitfor does not match a
+	// stale loopprog process from a previous repetition.
+	id := atomic.AddUint64(&waitForInvocationID, 1)
+	uniqueArg := fmt.Sprintf("%s-%d", t.Name(), id)
+	cmd := exec.Command(fixture.Path, uniqueArg)
+	waitForName := fixture.Path + " " + uniqueArg
 
 	go func() {
 		time.Sleep(2 * time.Second)
