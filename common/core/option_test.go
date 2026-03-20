@@ -1,9 +1,10 @@
-package core
+package core_test
 
 import (
 	"testing"
 
 	"github.com/typesanitizer/happygo/common/check"
+	. "github.com/typesanitizer/happygo/common/core"
 )
 
 func TestOption(t *testing.T) {

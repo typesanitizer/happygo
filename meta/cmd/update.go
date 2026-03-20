@@ -4,10 +4,11 @@ import (
 	"fmt"
 
 	"github.com/typesanitizer/happygo/common/cmdx"
+	. "github.com/typesanitizer/happygo/common/core"
 	"github.com/typesanitizer/happygo/common/logx"
 )
 
-func (ws Workspace) runUpdate(ctx logx.LogCtx, dir string, localBranch string, projects []string) error {
+func (ws Workspace) runUpdate(ctx logx.LogCtx, dir AbsPath, localBranch string, projects []string) error {
 	for _, project := range projects {
 		upstream, err := ws.Config.UpstreamForProject(localBranch, project)
 		if err != nil {
@@ -18,7 +19,7 @@ func (ws Workspace) runUpdate(ctx logx.LogCtx, dir string, localBranch string, p
 		subtreePullCmd := cmdx.New(
 			"git", "subtree", "pull", "--prefix", project, upstreamURL, upstream.Branch,
 		).In(dir)
-		stdout, err := subtreePullCmd.Run(ctx, cmdx.RunOptions{CaptureStdout: true})
+		stdout, err := subtreePullCmd.Run(ctx, cmdx.RunOptions{CaptureStdout: true, TransformEnv: nil})
 		if err != nil {
 			if stdout != "" {
 				ctx.Info("subtree pull stdout", "output", stdout)

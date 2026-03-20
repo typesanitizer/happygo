@@ -5,17 +5,17 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"sort"
 	"strings"
 
+	. "github.com/typesanitizer/happygo/common/core"
 	"github.com/typesanitizer/happygo/common/errorx"
 	"github.com/typesanitizer/happygo/common/logx"
 	"github.com/typesanitizer/happygo/meta/internal/config"
 )
 
-func loadWorkspaceConfig(repoRoot string) (_ config.WorkspaceConfig, retErr error) {
-	path := filepath.Join(repoRoot, "meta", "repo-configuration.json")
+func loadWorkspaceConfig(repoRoot AbsPath) (_ config.WorkspaceConfig, retErr error) {
+	path := repoRoot.JoinComponents("meta", "repo-configuration.json").String()
 	f, err := os.Open(path)
 	if err != nil {
 		return config.WorkspaceConfig{}, errorx.Wrapf("+stacks", err, "open %s", path)
@@ -41,15 +41,15 @@ const (
 type ListProvenance int
 
 const (
-	ListProvenance_All        ListProvenance = iota + 1
+	ListProvenance_All ListProvenance = iota + 1
 	ListProvenance_FirstParty
 	ListProvenance_Forked
 )
 
 // Workspace provides operations over the repository root using the repo configuration.
 type Workspace struct {
-	RepoRoot   string
-	Config config.WorkspaceConfig
+	RepoRoot AbsPath
+	Config   config.WorkspaceConfig
 }
 
 func newWorkspaceFromGit() (Workspace, error) {
@@ -57,7 +57,7 @@ func newWorkspaceFromGit() (Workspace, error) {
 	if err != nil {
 		return Workspace{}, errorx.Wrapf("nostack", err, "determine git repository root")
 	}
-	repoRoot := strings.TrimSpace(string(out))
+	repoRoot := NewAbsPath(strings.TrimSpace(string(out)))
 	wsConfig, err := loadWorkspaceConfig(repoRoot)
 	return Workspace{RepoRoot: repoRoot, Config: wsConfig}, err
 }
@@ -78,9 +78,22 @@ func (w Workspace) List(logger *logx.Logger, out io.Writer, opts ListOptions) er
 }
 
 func (w Workspace) listGoModules(logger *logx.Logger, out io.Writer, provenance ListProvenance) error {
-	entries, err := os.ReadDir(w.RepoRoot)
+	folders, err := w.goModules(logger, provenance)
 	if err != nil {
-		return errorx.Wrapf("+stacks", err, "read directory %s", w.RepoRoot)
+		return err
+	}
+	for _, f := range folders {
+		if _, err := fmt.Fprintln(out, f); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (w Workspace) goModules(logger *logx.Logger, provenance ListProvenance) ([]string, error) {
+	entries, err := w.RepoRoot.ReadDir()
+	if err != nil {
+		return nil, errorx.Wrapf("+stacks", err, "read directory %s", w.RepoRoot.String())
 	}
 
 	var folders []string
@@ -89,7 +102,7 @@ func (w Workspace) listGoModules(logger *logx.Logger, out io.Writer, provenance 
 			continue
 		}
 		name := entry.Name()
-		if _, err := os.Stat(filepath.Join(w.RepoRoot, name, "go.mod")); err != nil {
+		if _, err := w.RepoRoot.JoinComponents(name, "go.mod").Stat(); err != nil {
 			if !os.IsNotExist(err) {
 				logger.Warn("stat go.mod", "dir", name, "err", err)
 			}
@@ -112,13 +125,7 @@ func (w Workspace) listGoModules(logger *logx.Logger, out io.Writer, provenance 
 	sort.Strings(folders) // for determinism
 
 	if len(folders) == 0 {
-		return errorx.Newf("nostack", "no Go modules found matching filter")
+		return nil, errorx.Newf("nostack", "no Go modules found matching filter")
 	}
-
-	for _, f := range folders {
-		if _, err := fmt.Fprintln(out, f); err != nil {
-			return err
-		}
-	}
-	return nil
+	return folders, nil
 }

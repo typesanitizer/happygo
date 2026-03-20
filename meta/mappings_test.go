@@ -4,7 +4,6 @@ import (
 	"maps"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/typesanitizer/happygo/common/check"
 	"github.com/typesanitizer/happygo/common/collections"
+	. "github.com/typesanitizer/happygo/common/core"
 	"github.com/typesanitizer/happygo/common/iterx"
 	"github.com/typesanitizer/happygo/meta/internal/config"
 )
@@ -32,7 +32,8 @@ func TestWorkspaceConfig(t *testing.T) {
 
 	repoRootBytes, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
 	h.NoErrorf(err, "resolving repo root")
-	repoRoot := strings.TrimSpace(string(repoRootBytes))
+	repoRootStr := strings.TrimSpace(string(repoRootBytes))
+	repoRoot := NewAbsPath(repoRootStr)
 
 	forkedProjects := map[string]config.GitHubRepo{
 		"go":    "golang/go",
@@ -62,8 +63,9 @@ func TestWorkspaceConfig(t *testing.T) {
 	h.Run("WorkflowProjectChoices", func(h check.Harness) {
 		h.Parallel()
 
-		workflowBytes, err := os.ReadFile(filepath.Join(repoRoot, ".github/workflows/upstream-sync.yml"))
-		h.NoErrorf(err, "reading upstream-sync.yml")
+		workflowPath := repoRoot.JoinComponents(".github", "workflows", "upstream-sync.yml")
+		workflowBytes, err := workflowPath.ReadFile()
+		h.NoErrorf(err, "reading %s", workflowPath.String())
 
 		var workflow struct {
 			On struct {
@@ -90,8 +92,9 @@ func TestWorkspaceConfig(t *testing.T) {
 	h.Run("LinterExclusions", func(h check.Harness) {
 		h.Parallel()
 
-		lintBytes, err := os.ReadFile(filepath.Join(repoRoot, ".golangci.yml"))
-		h.NoErrorf(err, "reading .golangci.yml")
+		lintPath := repoRoot.JoinComponents(".golangci.yml")
+		lintBytes, err := lintPath.ReadFile()
+		h.NoErrorf(err, "reading %s", lintPath.String())
 
 		var lintCfg struct {
 			Linters struct {

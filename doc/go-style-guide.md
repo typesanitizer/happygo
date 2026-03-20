@@ -2,6 +2,20 @@
 
 This guide applies to non-forked folders only (for example, `common/`, `meta/`, and `.github/`-adjacent helper code).
 
+## Variable naming
+
+### Strongly typed vs loosely typed values
+
+When both a strongly typed wrapper and a loosely typed alternative are
+present in the same scope, prefer a short name for the strongly typed
+value and a longer name for the loosely typed value.
+
+```go
+cwdStr, err := os.Getwd()
+if err != nil { ... }
+cwd := NewAbsPath(cwdStr) // good: don't use 'cwdAbs := ...'
+```
+
 ## Imports
 
 - Group order: stdlib, third-party, monorepo (`github.com/typesanitizer/happygo/...`).

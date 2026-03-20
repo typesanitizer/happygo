@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/typesanitizer/happygo/common/check"
+	. "github.com/typesanitizer/happygo/common/core"
 	"github.com/typesanitizer/happygo/common/logx"
 	"github.com/typesanitizer/happygo/meta/internal/config"
 )
@@ -24,7 +25,7 @@ func TestList(t *testing.T) {
 	})
 
 	ws := Workspace{
-		RepoRoot: root,
+		RepoRoot: NewAbsPath(root),
 		Config: config.WorkspaceConfig{
 			ForkedFolders: map[string]config.ForkedFolder{
 				"beta": {Folder: "beta", GitHubRepo: "example/beta"},
