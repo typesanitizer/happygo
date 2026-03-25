@@ -589,6 +589,14 @@ func TestGdbAutotmpTypes(t *testing.T) {
 	checkGdbVersion(t)
 	checkPtraceScope(t)
 
+	// NOTE(happygo): LUCI Windows builders skip this test because gdb
+	// is not on PATH (checkGdbVersion skips with "error executing gdb").
+	// However, GHA Windows runners have gdb (via MSYS2), which causes
+	// the test to run and then time out.
+	if runtime.GOOS == "windows" {
+		t.Skip("gdb tests not run on Windows upstream; times out on GHA")
+	}
+
 	if runtime.GOOS == "aix" && testing.Short() {
 		t.Skip("TestGdbAutotmpTypes is too slow on aix/ppc64")
 	}
