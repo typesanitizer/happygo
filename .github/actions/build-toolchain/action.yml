@@ -27,10 +27,23 @@ runs:
     # Cache the build artifacts from the stdlib build
     # so that downstream operations don't need to rebuild
     # parts of the stdlib.
+    #
+    # On pushes to main, save + restore cache so it stays fresh.
     - uses: actions/cache@v5
+      if: github.event_name == 'push'
       with:
         path: .cache/go-build
-        key: go-cache-${{ inputs.toolchain }}-${{ inputs.os }}
+        key: go-cache-${{ inputs.toolchain }}-${{ inputs.os }}-${{ github.sha }}
+        restore-keys: |
+          go-cache-${{ inputs.toolchain }}-${{ inputs.os }}-
+    # On PRs, restore cache read-only (no save) to avoid bloat.
+    - uses: actions/cache/restore@v5
+      if: github.event_name != 'push'
+      with:
+        path: .cache/go-build
+        key: go-cache-${{ inputs.toolchain }}-${{ inputs.os }}-${{ github.sha }}
+        restore-keys: |
+          go-cache-${{ inputs.toolchain }}-${{ inputs.os }}-
     - name: Build (unix)
       if: runner.os != 'Windows'
       shell: bash
