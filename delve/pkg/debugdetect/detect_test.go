@@ -49,8 +49,10 @@ func TestIntegration_WaitForDebugger(t *testing.T) {
 	fixturesDir := protest.FindFixturesDir()
 	fixtureSrc := filepath.Join(fixturesDir, "waitfordebugger.go")
 
-	const listenAddr = "127.0.0.1:40581"
-	cmd := exec.Command(dlvbin, "debug", fixtureSrc, "--headless", "--continue", "--accept-multiclient", "--listen", listenAddr)
+	// NOTE(happygo): Use :0 to let the OS pick a free port. happygo runs
+	// Delve tests with plain `go test ./...` (concurrent packages), so
+	// hard-coded ports cause bind collisions.
+	cmd := exec.Command(dlvbin, "debug", fixtureSrc, "--headless", "--continue", "--accept-multiclient", "--listen", "127.0.0.1:0")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		t.Fatal(err)
@@ -61,16 +63,24 @@ func TestIntegration_WaitForDebugger(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Read stdout until we see the program output
+	// Read stdout until we see the program output, extracting the
+	// listen address from Delve's startup banner along the way.
 	scanner := bufio.NewScanner(stdout)
+	var listenAddr string
 	foundOutput := false
 	for scanner.Scan() {
 		line := scanner.Text()
 		t.Log(line)
+		if addr, ok := strings.CutPrefix(line, "API server listening at: "); ok {
+			listenAddr = addr
+		}
 		if strings.Contains(line, "DEBUGGER_FOUND") {
 			foundOutput = true
 			break
 		}
+	}
+	if listenAddr == "" {
+		t.Fatal("dlv exited without printing listen address")
 	}
 
 	// Clean up - connect and detach
@@ -95,8 +105,7 @@ func TestIntegration_Attached(t *testing.T) {
 
 	// Run the fixture under dlv debug with --headless --continue
 	// This will attach the debugger, compile and run the program
-	const listenAddr = "127.0.0.1:40580"
-	cmd := exec.Command(dlvbin, "debug", fixtureSrc, "--headless", "--continue", "--accept-multiclient", "--listen", listenAddr)
+	cmd := exec.Command(dlvbin, "debug", fixtureSrc, "--headless", "--continue", "--accept-multiclient", "--listen", "127.0.0.1:0")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		t.Fatal(err)
@@ -107,16 +116,24 @@ func TestIntegration_Attached(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Read stdout until we see the program output
+	// Read stdout until we see the program output, extracting the
+	// listen address from Delve's startup banner along the way.
 	scanner := bufio.NewScanner(stdout)
+	var listenAddr string
 	foundOutput := false
 	for scanner.Scan() {
 		line := scanner.Text()
 		t.Log(line)
+		if addr, ok := strings.CutPrefix(line, "API server listening at: "); ok {
+			listenAddr = addr
+		}
 		if strings.Contains(line, "ATTACHED") {
 			foundOutput = true
 			break
 		}
+	}
+	if listenAddr == "" {
+		t.Fatal("dlv exited without printing listen address")
 	}
 
 	// Clean up - connect and detach
