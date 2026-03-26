@@ -1,10 +1,12 @@
 package test
 
 import (
+	"bufio"
 	"crypto/rand"
 	"encoding/hex"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -533,4 +535,51 @@ func getDlvBinInternal(t *testing.T, goflags ...string) string {
 	}
 
 	return dlvbin
+}
+
+// NOTE(happygo): happygo runs Delve tests with plain `go test ./...`
+// (concurrent packages), so tests use --listen 127.0.0.1:0 and read
+// the actual bound address from the startup banner.
+
+// DlvStdout manages Delve's stdout pipe for tests that need to read
+// the listen address from the startup banner.
+type DlvStdout struct {
+	cmd  *exec.Cmd
+	pipe io.ReadCloser
+	// Scanner is exposed for tests that need to keep reading stdout
+	// after extracting the listen address (e.g. for program output).
+	Scanner *bufio.Scanner
+}
+
+func NewDlvStdout(t *testing.T, cmd *exec.Cmd) *DlvStdout {
+	t.Helper()
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &DlvStdout{cmd: cmd, pipe: stdout, Scanner: bufio.NewScanner(stdout)}
+}
+
+func (s *DlvStdout) Close() { s.pipe.Close() }
+
+// ReadPort reads the first line from Delve's stdout and extracts the
+// listen address from the startup banner.
+func (s *DlvStdout) ReadPort(t *testing.T) string {
+	t.Helper()
+	if !s.Scanner.Scan() {
+		t.Fatal("dlv exited without printing listen address")
+	}
+	line := s.Scanner.Text()
+	t.Log(line)
+	for _, prefix := range []string{
+		"API server listening at: ",
+		"DAP server listening at: ",
+	} {
+		if addr, ok := strings.CutPrefix(line, prefix); ok {
+			return addr
+		}
+	}
+	s.cmd.Process.Kill()
+	t.Fatalf("expected server listen banner, got: %q", line)
+	panic("unreachable")
 }

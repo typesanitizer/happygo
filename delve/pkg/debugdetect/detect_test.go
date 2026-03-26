@@ -1,7 +1,6 @@
 package debugdetect
 
 import (
-	"bufio"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -49,23 +48,21 @@ func TestIntegration_WaitForDebugger(t *testing.T) {
 	fixturesDir := protest.FindFixturesDir()
 	fixtureSrc := filepath.Join(fixturesDir, "waitfordebugger.go")
 
-	const listenAddr = "127.0.0.1:40581"
-	cmd := exec.Command(dlvbin, "debug", fixtureSrc, "--headless", "--continue", "--accept-multiclient", "--listen", listenAddr)
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		t.Fatal(err)
-	}
+	// NOTE(happygo): Use :0 to let the OS pick a free port. happygo runs
+	// Delve tests with plain `go test ./...` (concurrent packages), so
+	// hard-coded ports cause bind collisions.
+	cmd := exec.Command(dlvbin, "debug", fixtureSrc, "--headless", "--continue", "--accept-multiclient", "--listen", "127.0.0.1:0")
+	stdout := protest.NewDlvStdout(t, cmd)
 	defer stdout.Close()
 
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
 
-	// Read stdout until we see the program output
-	scanner := bufio.NewScanner(stdout)
+	listenAddr := stdout.ReadPort(t)
 	foundOutput := false
-	for scanner.Scan() {
-		line := scanner.Text()
+	for stdout.Scanner.Scan() {
+		line := stdout.Scanner.Text()
 		t.Log(line)
 		if strings.Contains(line, "DEBUGGER_FOUND") {
 			foundOutput = true
@@ -95,23 +92,18 @@ func TestIntegration_Attached(t *testing.T) {
 
 	// Run the fixture under dlv debug with --headless --continue
 	// This will attach the debugger, compile and run the program
-	const listenAddr = "127.0.0.1:40580"
-	cmd := exec.Command(dlvbin, "debug", fixtureSrc, "--headless", "--continue", "--accept-multiclient", "--listen", listenAddr)
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		t.Fatal(err)
-	}
+	cmd := exec.Command(dlvbin, "debug", fixtureSrc, "--headless", "--continue", "--accept-multiclient", "--listen", "127.0.0.1:0")
+	stdout := protest.NewDlvStdout(t, cmd)
 	defer stdout.Close()
 
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
 
-	// Read stdout until we see the program output
-	scanner := bufio.NewScanner(stdout)
+	listenAddr := stdout.ReadPort(t)
 	foundOutput := false
-	for scanner.Scan() {
-		line := scanner.Text()
+	for stdout.Scanner.Scan() {
+		line := stdout.Scanner.Text()
 		t.Log(line)
 		if strings.Contains(line, "ATTACHED") {
 			foundOutput = true
