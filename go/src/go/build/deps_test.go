@@ -54,7 +54,6 @@ var depsRules = `
 	  internal/goexperiment,
 	  internal/goos,
 	  internal/goversion,
-	  internal/itoa,
 	  internal/nettrace,
 	  internal/platform,
 	  internal/profilerecord,
@@ -84,7 +83,6 @@ var depsRules = `
 	internal/godebugs,
 	internal/goexperiment,
 	internal/goos,
-	internal/itoa,
 	internal/profilerecord,
 	internal/runtime/pprof/label,
 	internal/strconv,
@@ -633,7 +631,10 @@ var depsRules = `
 
 	# HTTP, King of Dependencies.
 
-	FMT
+	context
+	< internal/gate;
+
+	FMT, encoding/binary
 	< golang.org/x/net/http2/hpack
 	< net/http/internal, net/http/internal/ascii, net/http/internal/testcert;
 
@@ -659,6 +660,7 @@ var depsRules = `
 	mime/multipart,
 	log
 	< net/http/internal/httpcommon, net/http/internal/httpsfv
+	< net/http/internal/http2
 	< net/http;
 
 	# HTTP-aware packages

@@ -1488,6 +1488,12 @@ func (ctxt *Link) hostlink() {
 				argv = append(argv, "-Wl,-x")
 			}
 		}
+		if *flagRace {
+			// With https://github.com/llvm/llvm-project/pull/182943, the race object
+			// has a weak import of __dyld_get_dyld_header, which is only defined on
+			// newer macOS (26.4+).
+			argv = append(argv, "-Wl,-U,__dyld_get_dyld_header")
+		}
 		if *flagHostBuildid == "none" {
 			argv = append(argv, "-Wl,-no_uuid")
 		}
@@ -2274,6 +2280,13 @@ func trimLinkerArgv(argv []string) []string {
 		"--stdlib",
 		"-unwindlib",
 		"--unwindlib",
+		"-nostdlib++",
+		"-nostdlib",
+		"-nodefaultlibs",
+		"-nostartfiles",
+		"-nostdinc++",
+		"-nostdinc",
+		"-nobuiltininc",
 	}
 
 	var flags []string
@@ -2398,9 +2411,7 @@ func ldobj(ctxt *Link, f *bio.Reader, lib *sym.Library, length int64, pn string,
 			if len(ls.Resources) != 0 {
 				setpersrc(ctxt, ls.Resources)
 			}
-			if ls.PData != 0 {
-				sehp.pdata = append(sehp.pdata, ls.PData)
-			}
+			sehp.pdata = append(sehp.pdata, ls.PData...)
 			if ls.XData != 0 {
 				sehp.xdata = append(sehp.xdata, ls.XData)
 			}
@@ -3040,7 +3051,7 @@ func AddGotSym(target *Target, ldr *loader.Loader, syms *ArchSyms, s loader.Sym,
 			// Mach-O relocations are a royal pain to lay out.
 			// They use a compact stateful bytecode representation.
 			// Here we record what are needed and encode them later.
-			MachoAddBind(int64(ldr.SymGot(s)), s)
+			MachoAddBind(syms.GOT, int64(ldr.SymGot(s)), s)
 		}
 	} else {
 		ldr.Errorf(s, "addgotsym: unsupported binary format")

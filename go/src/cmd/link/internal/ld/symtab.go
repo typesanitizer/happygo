@@ -459,15 +459,12 @@ func (ctxt *Link) symtab(pcln *pclntab) []sym.SymKind {
 	ctxt.xdefine("runtime.egcbss", sym.SRODATA, 0)
 
 	// pseudo-symbols to mark locations of type, string, and go string data.
-	var symtype loader.Sym
-	if !ctxt.DynlinkingGo() {
-		s = ldr.CreateSymForUpdate("type:*", 0)
-		s.SetType(sym.STYPE)
-		s.SetSize(0)
-		s.SetAlign(int32(ctxt.Arch.PtrSize))
-		symtype = s.Sym()
-		setCarrierSym(sym.STYPE, symtype)
-	}
+	s = ldr.CreateSymForUpdate("type:*", 0)
+	s.SetType(sym.STYPE)
+	s.SetSize(0)
+	s.SetAlign(int32(ctxt.Arch.PtrSize))
+	symtype := s.Sym()
+	setCarrierSym(sym.STYPE, symtype)
 
 	groupSym := func(name string, t sym.SymKind) loader.Sym {
 		s := ldr.CreateSymForUpdate(name, 0)
@@ -523,20 +520,16 @@ func (ctxt *Link) symtab(pcln *pclntab) []sym.SymKind {
 		case strings.HasPrefix(name, "type:"):
 			if !ctxt.DynlinkingGo() {
 				ldr.SetAttrNotInSymbolTable(s, true)
-			}
-			symGroupType[s] = sym.STYPE
-			if symtype != 0 {
 				ldr.SetCarrierSym(s, symtype)
 			}
-			if ctxt.HeadType == objabi.Haix {
-				// The default alignment is currently 0x20,
-				// which the AIX external linker doesn't
-				// seem to support. To get consistent
-				// alignment on AIX, force alignment to 8.
-				if symalign(ldr, s) > 8 {
-					ldr.SetSymAlign(s, 8)
-				}
+			symGroupType[s] = sym.STYPE
+
+		case ldr.IsItab(s):
+			if !ctxt.DynlinkingGo() {
+				ldr.SetAttrNotInSymbolTable(s, true)
+				ldr.SetCarrierSym(s, symtype)
 			}
+			symGroupType[s] = sym.STYPE
 		}
 	}
 
@@ -630,6 +623,8 @@ func (ctxt *Link) symtab(pcln *pclntab) []sym.SymKind {
 	ctxt.moduledataTypeDescOffset = moduledata.Size()
 	moduledata.AddUint(ctxt.Arch, 0) // filled in by dodataSect
 	moduledata.AddAddr(ctxt.Arch, ldr.Lookup("runtime.etypes", 0))
+	ctxt.moduledataItabOffset = moduledata.Size()
+	moduledata.AddUint(ctxt.Arch, 0) // filled in by dodataSect
 	moduledata.AddAddr(ctxt.Arch, ldr.Lookup("runtime.rodata", 0))
 	moduledata.AddAddr(ctxt.Arch, ldr.Lookup("go:func.*", 0))
 	moduledata.AddAddr(ctxt.Arch, ldr.Lookup("runtime.epclntab", 0))
@@ -671,11 +666,6 @@ func (ctxt *Link) symtab(pcln *pclntab) []sym.SymKind {
 
 	// text section information
 	slice(textsectionmapSym, uint64(nsections))
-
-	// The itablinks slice
-	itablinkSym := ldr.Lookup("runtime.itablink", 0)
-	nitablinks := uint64(ldr.SymSize(itablinkSym)) / uint64(ctxt.Arch.PtrSize)
-	slice(itablinkSym, nitablinks)
 
 	// The ptab slice
 	if ptab := ldr.Lookup("go:plugin.tabs", 0); ptab != 0 && ldr.AttrReachable(ptab) {

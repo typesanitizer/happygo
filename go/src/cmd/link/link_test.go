@@ -484,8 +484,8 @@ func TestMachOBuildVersion(t *testing.T) {
 	found := false
 	checkMin := func(ver uint32) {
 		major, minor, patch := (ver>>16)&0xff, (ver>>8)&0xff, (ver>>0)&0xff
-		if major < 12 {
-			t.Errorf("LC_BUILD_VERSION version %d.%d.%d < 12.0.0", major, minor, patch)
+		if major < 13 {
+			t.Errorf("LC_BUILD_VERSION version %d.%d.%d < 13.0.0", major, minor, patch)
 		}
 	}
 	for _, cmd := range exem.Loads {
@@ -1436,7 +1436,6 @@ func TestExtLinkCmdlineDeterminism(t *testing.T) {
 	// Test that we pass flags in deterministic order to the external linker
 	testenv.MustHaveGoBuild(t)
 	testenv.MustHaveCGO(t) // this test requires -linkmode=external
-	t.Parallel()
 
 	// test source code, with some cgo exports
 	testSrc := `
@@ -1468,10 +1467,11 @@ func main() {}
 	// Link with -v -linkmode=external to see the flags we pass to the
 	// external linker.
 	ldflags := "-ldflags=-v -linkmode=external -tmpdir=" + linktmp
-	var out0 []byte
+	var out0, fullOut0 []byte
 	for i := 0; i < 5; i++ {
-		cmd := goCmd(t, "build", ldflags, "-o", exe, src)
-		out, err := cmd.CombinedOutput()
+		cmd := goCmd(t, "build", ldflags, "-x", "-o", exe, src)
+		fullOut, err := cmd.CombinedOutput()
+		out := fullOut
 		if err != nil {
 			t.Fatalf("build failed: %v, output:\n%s", err, out)
 		}
@@ -1504,10 +1504,12 @@ func main() {}
 
 		if i == 0 {
 			out0 = out
+			fullOut0 = fullOut
 			continue
 		}
 		if !bytes.Equal(out0, out) {
-			t.Fatalf("output differ:\n%s\n==========\n%s", out0, out)
+			t.Fatalf("output differ:\n%s\n==========\n%s\n\nfull output:\n%s\n==========\n%s",
+				out0, out, fullOut0, fullOut)
 		}
 	}
 }
@@ -1715,7 +1717,6 @@ func TestCheckLinkname(t *testing.T) {
 		{"badlinkname.go", true},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(test.src, func(t *testing.T) {
 			t.Parallel()
 			src := "./testdata/linkname/" + test.src
