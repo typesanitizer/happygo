@@ -346,9 +346,10 @@ Speciftying -save <filename> saves all breakpoints to the specified file in a fo
 See Documentation/cli/expr.md for a description of supported expressions.
 
 The optional format argument is a format specifier, like the ones used by the fmt package. For example "print %x v" will print v as an hexadecimal number.`},
-		{aliases: []string{"whatis"}, group: dataCmds, cmdFn: whatisCommand, helpMsg: `Prints type of an expression.
+		{aliases: []string{"whatis"}, group: dataCmds, cmdFn: whatisCommand, helpMsg: `Prints type of an expression or a type.
 
-	whatis <expression>`},
+	whatis <expression>
+	whatis <type name>`},
 		{aliases: []string{"set"}, group: dataCmds, cmdFn: setVar, helpMsg: `Changes the value of a variable.
 
 	[goroutine <n>] [frame <m>] set <variable> = <value>
@@ -2101,19 +2102,18 @@ func examineMemoryCmd(t *Term, ctx callContext, argstr string) error {
 			return err
 		}
 
-		// "-x &myVar" or "-x myPtrVar"
-		if val.Kind == reflect.Ptr {
+		switch val.Kind {
+		case reflect.Ptr: // "-x &myVar" or "-x myPtrVar"
 			if len(val.Children) < 1 {
 				return fmt.Errorf("bug? invalid pointer: %#v", val)
 			}
 			address = val.Children[0].Addr
-			// "-x 0xc000079f20 + 8" or -x 824634220320 + 8
-		} else if val.Kind == reflect.Int && val.Value != "" {
-			address, err = strconv.ParseUint(val.Value, 0, 64)
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr: // "-x 0xc000079f20 + 8" or -x 824634220320 + 8
+			address, err = strconv.ParseUint(api.ExtractIntValue(val.Value), 0, 64)
 			if err != nil {
 				return fmt.Errorf("bad expression result: %q: %s", val.Value, err)
 			}
-		} else {
+		default:
 			return fmt.Errorf("unsupported expression type: %s", val.Kind)
 		}
 	} else {
@@ -2200,7 +2200,30 @@ func whatisCommand(t *Term, ctx callContext, args string) error {
 	}
 	val, err := t.client.EvalVariable(ctx.Scope, args, ShortLoadConfig)
 	if err != nil {
-		return err
+		info, err2 := t.client.TypeInfo(args)
+		if err2 != nil {
+			return err
+		}
+		fmt.Fprintf(t.stdout, "%s type, size: %d bytes\n", info.Kind.String(), info.Size)
+		if info.RealType != "" {
+			fmt.Fprintf(t.stdout, "Real type: %s\n", info.RealType)
+		}
+		if len(info.Fields) > 0 {
+			fmt.Fprintf(t.stdout, "Fields:\n")
+			w := new(tabwriter.Writer)
+			w.Init(t.stdout, 0, 8, 2, ' ', tabwriter.TabIndent)
+			for _, field := range info.Fields {
+				fmt.Fprintf(w, "\t%s\t%s\n", field.Name, field.Type)
+			}
+			w.Flush()
+		}
+		if len(info.Methods) > 0 {
+			fmt.Fprintf(t.stdout, "Methods:\n")
+			for _, method := range info.Methods {
+				fmt.Fprintf(t.stdout, "\t%s\n", method.Name)
+			}
+		}
+		return nil
 	}
 	if val.Flags&api.VariableCPURegister != 0 {
 		fmt.Fprintln(t.stdout, "CPU Register")
