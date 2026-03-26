@@ -1,7 +1,6 @@
 package debugdetect
 
 import (
-	"bufio"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -53,34 +52,22 @@ func TestIntegration_WaitForDebugger(t *testing.T) {
 	// Delve tests with plain `go test ./...` (concurrent packages), so
 	// hard-coded ports cause bind collisions.
 	cmd := exec.Command(dlvbin, "debug", fixtureSrc, "--headless", "--continue", "--accept-multiclient", "--listen", "127.0.0.1:0")
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		t.Fatal(err)
-	}
+	stdout := protest.NewDlvStdout(t, cmd)
 	defer stdout.Close()
 
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
 
-	// Read stdout until we see the program output, extracting the
-	// listen address from Delve's startup banner along the way.
-	scanner := bufio.NewScanner(stdout)
-	var listenAddr string
+	listenAddr := stdout.ReadPort(t)
 	foundOutput := false
-	for scanner.Scan() {
-		line := scanner.Text()
+	for stdout.Scanner.Scan() {
+		line := stdout.Scanner.Text()
 		t.Log(line)
-		if addr, ok := strings.CutPrefix(line, "API server listening at: "); ok {
-			listenAddr = addr
-		}
 		if strings.Contains(line, "DEBUGGER_FOUND") {
 			foundOutput = true
 			break
 		}
-	}
-	if listenAddr == "" {
-		t.Fatal("dlv exited without printing listen address")
 	}
 
 	// Clean up - connect and detach
@@ -106,34 +93,22 @@ func TestIntegration_Attached(t *testing.T) {
 	// Run the fixture under dlv debug with --headless --continue
 	// This will attach the debugger, compile and run the program
 	cmd := exec.Command(dlvbin, "debug", fixtureSrc, "--headless", "--continue", "--accept-multiclient", "--listen", "127.0.0.1:0")
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		t.Fatal(err)
-	}
+	stdout := protest.NewDlvStdout(t, cmd)
 	defer stdout.Close()
 
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
 
-	// Read stdout until we see the program output, extracting the
-	// listen address from Delve's startup banner along the way.
-	scanner := bufio.NewScanner(stdout)
-	var listenAddr string
+	listenAddr := stdout.ReadPort(t)
 	foundOutput := false
-	for scanner.Scan() {
-		line := scanner.Text()
+	for stdout.Scanner.Scan() {
+		line := stdout.Scanner.Text()
 		t.Log(line)
-		if addr, ok := strings.CutPrefix(line, "API server listening at: "); ok {
-			listenAddr = addr
-		}
 		if strings.Contains(line, "ATTACHED") {
 			foundOutput = true
 			break
 		}
-	}
-	if listenAddr == "" {
-		t.Fatal("dlv exited without printing listen address")
 	}
 
 	// Clean up - connect and detach
