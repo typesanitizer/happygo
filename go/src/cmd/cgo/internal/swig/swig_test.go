@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -89,6 +90,14 @@ var (
 )
 
 func mustHaveSwig(t *testing.T) {
+	// NOTE(happygo): LUCI Windows builders skip these tests implicitly because
+	// swig is not installed, so upstream does not exercise cmd/cgo/internal/swig
+	// there. GHA Windows has swig available and exposes lto failures, so skip
+	// on Windows to match upstream coverage.
+	if runtime.GOOS == "windows" {
+		t.Skip("swig not tested on Windows upstream")
+	}
+
 	swigOnce.Do(func() {
 		mustHaveSwigOnce(t)
 		haveSwig = true
