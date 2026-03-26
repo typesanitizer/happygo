@@ -1689,6 +1689,20 @@ func (ctxt *Link) dodata(symGroupType []sym.SymKind) {
 		ldr.SetAttrOnList(s, true)
 	}
 
+	// SEH symbols are tracked in side lists (sehp.pdata/xdata), so make
+	// them follow the same reachability decision used for all other data.
+	filterReachableSEH := func(syms []loader.Sym) []loader.Sym {
+		out := syms[:0]
+		for _, s := range syms {
+			if ldr.AttrReachable(s) {
+				out = append(out, s)
+			}
+		}
+		return out
+	}
+	sehp.pdata = filterReachableSEH(sehp.pdata)
+	sehp.xdata = filterReachableSEH(sehp.xdata)
+
 	// Now that we have the data symbols, but before we start
 	// to assign addresses, record all the necessary
 	// dynamic relocations. These will grow the relocation
@@ -2253,16 +2267,6 @@ func (state *dodataState) allocateDataSections(ctxt *Link) {
 	state.allocateSingleSymSections(segRelro, sym.SELFRELROSECT, sym.SRODATA, relroPerm)
 	state.allocateSingleSymSections(segRelro, sym.SMACHORELROSECT, sym.SRODATA, relroPerm)
 
-	/* itablink */
-	sect = state.allocateNamedDataSection(segRelro, genrelrosecname(".itablink"), []sym.SymKind{sym.SITABLINK}, relroPerm)
-
-	itablink := ldr.CreateSymForUpdate("runtime.itablink", 0)
-	ldr.SetSymSect(itablink.Sym(), sect)
-	itablink.SetType(sym.SRODATA)
-	state.datsize += itablink.Size()
-	state.checkdatsize(sym.SITABLINK)
-	sect.Length = uint64(state.datsize) - sect.Vaddr
-
 	// 6g uses 4-byte relocation offsets, so the entire segment must fit in 32 bits.
 	if state.datsize != int64(uint32(state.datsize)) {
 		Errorf("read-only data segment too large: %d", state.datsize)
@@ -2430,6 +2434,7 @@ func (state *dodataState) dodataSect(ctxt *Link, symn sym.SymKind, syms []loader
 		// Sort type descriptors with the typelink flag first,
 		// sorted by type string. The reflect package will use
 		// this to ensure that type descriptor pointers are unique.
+		// Sort itabs after type descriptors.
 
 		// We define type:* for some links.
 		typeStar := ldr.Lookup("type:*", 0)
@@ -2458,23 +2463,32 @@ func (state *dodataState) dodataSect(ctxt *Link, symn sym.SymKind, syms []loader
 				}
 			}
 
-			iTypestr, iIsTypelink := typelinkStrings[si]
-			jTypestr, jIsTypelink := typelinkStrings[sj]
+			iIsType := !ldr.IsItab(si)
+			jIsType := !ldr.IsItab(sj)
+			if iIsType && jIsType {
+				iTypestr, iIsTypelink := typelinkStrings[si]
+				jTypestr, jIsTypelink := typelinkStrings[sj]
 
-			if iIsTypelink {
-				if jIsTypelink {
+				if iIsTypelink && jIsTypelink {
 					// typelink symbols sort by type string
 					return iTypestr < jTypestr
+				} else if iIsTypelink {
+					// typelink < non-typelink
+					return true
+				} else if jIsTypelink {
+					// non-typelink > typelink
+					return false
 				}
-
-				// typelink < non-typelink
+			} else if iIsType {
+				// type < itab
 				return true
-			} else if jIsTypelink {
-				// non-typelink greater than typelink
+			} else if jIsType {
+				// itab > type
 				return false
 			}
 
-			// non-typelink symbols sort by size as usual
+			// Otherwise, within non-typelink types and itabs,
+			// sort by size as usual.
 			return sortFn(i, j)
 		})
 
@@ -2486,7 +2500,8 @@ func (state *dodataState) dodataSect(ctxt *Link, symn sym.SymKind, syms []loader
 		// there will be an increment either way.
 		// TODO: This wastes some space.
 		typeLinkSize := int64(ctxt.Arch.PtrSize)
-		for i := range sl {
+		i := 0
+		for ; i < len(sl); i++ {
 			si := sl[i].sym
 			if si == head || si == typeStar {
 				continue
@@ -2505,6 +2520,27 @@ func (state *dodataState) dodataSect(ctxt *Link, symn sym.SymKind, syms []loader
 		} else {
 			su := ldr.MakeSymbolUpdater(ctxt.Moduledata)
 			su.SetUint(ctxt.Arch, ctxt.moduledataTypeDescOffset, uint64(typeLinkSize))
+		}
+
+		// Find the end of the type descriptors.
+		typeSize := typeLinkSize
+		for ; i < len(sl); i++ {
+			if ldr.IsItab(sl[i].sym) {
+				break
+			}
+			typeSize = Rnd(typeSize, int64(symalign(ldr, sl[i].sym)))
+			typeSize += sl[i].sz
+		}
+
+		if i < len(sl) {
+			typeSize = Rnd(typeSize, int64(symalign(ldr, sl[i].sym)))
+		}
+
+		if ctxt.moduledataItabOffset == 0 {
+			Errorf("internal error: phase error: moduledataItabOffset not set in dodataSect")
+		} else {
+			su := ldr.MakeSymbolUpdater(ctxt.Moduledata)
+			su.SetUint(ctxt.Arch, ctxt.moduledataItabOffset, uint64(typeSize))
 		}
 
 	default:
@@ -2776,6 +2812,11 @@ func (ctxt *Link) textaddress() {
 		// (i.e. not darwin+dynlink or AIX+external, see above).
 		ldr.SetSymValue(etext, int64(va))
 		ldr.SetSymValue(text, int64(Segtext.Sections[0].Vaddr))
+	}
+	if ctxt.IsWindows() {
+		// .pdata entries should be sorted by address, so process them now
+		// that we have final addresses for the text symbols.
+		collectSEH(ctxt)
 	}
 }
 
