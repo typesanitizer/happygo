@@ -11,8 +11,7 @@ jobs:
     name: ${{ matrix.os }}
     strategy:
       matrix:
-        # TEMP: narrow to Ubuntu only for Delve port-fix stress test
-        os: [ubuntu-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     uses: ./.github/workflows/build-and-test.yml
     with:
       os: ${{ matrix.os }}

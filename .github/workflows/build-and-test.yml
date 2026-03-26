@@ -190,6 +190,4 @@ jobs:
             gotip)  export DELVE_TEST_GO="$PWD/gotip/bin/go" ;;
             head)   ;;
           esac
-          # TEMP: stress-test the port-fix tests 10× to verify no flakes
-          go test -C delve -run "TestBuild$|TestUnattendedBreakpoint|TestContinue$|TestRedirect$|TestDAPCmd$|TestRemoteDAPClient$|TestRemoteDAPClientMulti$|TestRemoteDAPClientAfterContinue$" -count=10 -v ./cmd/dlv/
-          go test -C delve -run "TestIntegration_WaitForDebugger|TestIntegration_Attached" -count=10 -v ./pkg/debugdetect/
+          go test -C delve ./...
