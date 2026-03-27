@@ -14,6 +14,10 @@ func (e AssertionError) String() string {
 	return fmt.Sprintf(e.Fmt, e.Args...)
 }
 
+func (e AssertionError) Error() string {
+	return e.String()
+}
+
 //go:noinline
 func panicWith[R any](msg string, args []any) R {
 	panic(AssertionError{Fmt: msg, Args: args})

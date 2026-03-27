@@ -27,15 +27,77 @@ func IsUpdateFlagSet() bool {
 	return flag.Lookup("update").Value.(flag.Getter).Get().(bool)
 }
 
-// Harness wraps testing.T with assertion and snapshot helpers.
+// TB is the minimal interface for test assertion support.
+// Both *testing.T and *rapid.T satisfy this.
+// We cannot use testing.TB because it has a private method
+// that prevents external types like *rapid.T from satisfying it.
+type TB interface {
+	Helper()
+	Fatalf(format string, args ...any)
+	Logf(format string, args ...any)
+}
+
+// BasicHarness provides test assertion helpers over a [TB].
+type BasicHarness interface {
+	Assertf(cond bool, msg string, args ...any)
+	NoErrorf(err error, msg string, args ...any)
+	AssertPanicsWith(want error, f func())
+	Logf(msg string, args ...any)
+}
+
+type tbHarness struct {
+	tb TB
+}
+
+// NewBasic returns a [BasicHarness] wrapping tb.
+func NewBasic(tb TB) BasicHarness {
+	return tbHarness{tb: tb}
+}
+
+func (h tbHarness) Assertf(cond bool, msg string, args ...any) {
+	h.tb.Helper()
+	if !cond {
+		h.tb.Fatalf(msg, args...)
+	}
+}
+
+func (h tbHarness) NoErrorf(err error, msg string, args ...any) {
+	h.tb.Helper()
+	if err != nil {
+		h.tb.Fatalf("got error: %v\n"+msg, append([]any{err}, args...)...)
+	}
+}
+
+func (h tbHarness) AssertPanicsWith(want error, f func()) {
+	h.tb.Helper()
+	var got any
+	func() {
+		defer func() {
+			got = recover()
+		}()
+		f()
+	}()
+	h.Assertf(got != nil, "expected panic")
+	gotErr, ok := got.(error)
+	h.Assertf(ok, "panic value is %T, want error", got)
+	AssertSame(h, want, gotErr, "panic value")
+}
+
+func (h tbHarness) Logf(msg string, args ...any) {
+	h.tb.Helper()
+	h.tb.Logf(msg, args...)
+}
+
+// Harness wraps testing.T with assertion, snapshot, and test management helpers.
 type Harness struct {
+	BasicHarness
 	t *testing.T
 }
 
 // New returns a Harness. Value receiver per GO_STYLE_GUIDE.md.
 func New(t *testing.T) Harness {
 	t.Helper()
-	return Harness{t: t}
+	return Harness{BasicHarness: NewBasic(t), t: t}
 }
 
 // Parallel marks the test as parallel (wraps testing.T.Parallel).
@@ -53,38 +115,10 @@ func (h Harness) Run(name string, f func(Harness)) {
 	})
 }
 
-func (h Harness) fatalf(msg string, args ...any) {
-	h.t.Helper()
-	h.t.Fatalf(msg, args...) //nolint:forbidigo // this is the designated wrapper
-}
-
-// Assertf asserts that cond is true, failing the test if not.
-func (h Harness) Assertf(cond bool, msg string, args ...any) {
-	h.t.Helper()
-	if !cond {
-		h.fatalf(msg, args...)
-	}
-}
-
-// NoErrorf asserts that err is nil, failing the test if not.
-func (h Harness) NoErrorf(err error, msg string, args ...any) {
-	h.t.Helper()
-	if err != nil {
-		h.fatalf("got error: %v\n"+msg, append([]any{err}, args...)...)
-	}
-}
-
-// Logf logs a message via the underlying testing.T.
-func (h Harness) Logf(msg string, args ...any) {
-	h.t.Helper()
-	h.t.Logf(msg, args...)
-}
-
 // AssertSame compares want and got using cmp.Diff and fails with a diff if they differ.
-func AssertSame[T any](h Harness, want, got T, what string) {
-	h.t.Helper()
+func AssertSame[T any](h BasicHarness, want, got T, what string) {
 	if diff := cmp.Diff(want, got); diff != "" {
-		h.fatalf("%s mismatch (-want +got):\n%s", what, diff)
+		h.Assertf(false, "%s mismatch (-want +got):\n%s", what, diff)
 	}
 }
 
@@ -126,7 +160,7 @@ func (h Harness) SnapshotAt(path string) Snapshot {
 	h.t.Helper()
 	cwd, err := os.Getwd()
 	if err != nil {
-		h.fatalf("getting working directory: %v", err)
+		h.Assertf(false, "getting working directory: %v", err)
 	}
 	h.Assertf(pathx.LexicallyContains(cwd, path), "snapshot path %q escapes working directory", path)
 	return Snapshot{harness: h, path: path}

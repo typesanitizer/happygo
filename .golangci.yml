@@ -81,3 +81,5 @@ linters:
           msg: use Harness.Run instead of t.Run
         - pattern: ^testing\.T\.Parallel$
           msg: use Harness.Parallel instead of t.Parallel
+        - pattern: ^pgregory\.net/rapid\.T\.(Errorf|Error|Fatalf|Fatal|FailNow|Fail)$
+          msg: use check.NewBasic(t) instead of calling rapid.T methods directly
