@@ -87,7 +87,7 @@ func runSyncPRProject(ctx logx.LogCtx, repoRoot string, project string, base str
 		return nil
 	}
 	headSHA, err := cmdx.New("git", "rev-parse", "origin/"+syncBranch).In(repoRoot).
-		Run(ctx, cmdx.RunOptions{CaptureStdout: true})
+		Run(ctx, cmdx.RunOptions{CaptureStdout: true, Env: nil})
 	if err != nil {
 		return err
 	}
@@ -194,7 +194,7 @@ func subtreeMetadataForSyncHead(
 
 	var emptyMetadata subtreeMetadata
 	parentsOut, err := cmdx.New("git", "show", "--no-patch", "--format=%P", headSHA).In(repoRoot).
-		Run(ctx, cmdx.RunOptions{CaptureStdout: true})
+		Run(ctx, cmdx.RunOptions{CaptureStdout: true, Env: nil})
 	if err != nil {
 		return emptyMetadata, err
 	}
@@ -221,7 +221,7 @@ func listOpenPRs(
 		"--state", "open", "--base", base, "--head", head,
 		"--json", "number,url",
 	).In(repoRoot)
-	out, err := listPRsCmd.Run(ctx, cmdx.RunOptions{CaptureStdout: true})
+	out, err := listPRsCmd.Run(ctx, cmdx.RunOptions{CaptureStdout: true, Env: nil})
 	if err != nil {
 		return nil, err
 	}
@@ -244,7 +244,7 @@ func ensureLabelExists(
 		"gh", "label", "list",
 		"--search", name, "--json", "name", "--limit", "100",
 	).In(repoRoot)
-	out, err := listLabelsCmd.Run(ctx, cmdx.RunOptions{CaptureStdout: true})
+	out, err := listLabelsCmd.Run(ctx, cmdx.RunOptions{CaptureStdout: true, Env: nil})
 	if err != nil {
 		return err
 	}

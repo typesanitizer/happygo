@@ -191,3 +191,36 @@ jobs:
             head)   ;;
           esac
           go test -C delve ./...
+
+  test-vscode-go:
+    runs-on: ${{ inputs.os }}
+    needs: build-head
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-head-toolchain
+        with:
+          os: ${{ inputs.os }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: './vscode-go/extension/package-lock.json'
+      - name: Build SDK and extension
+        shell: bash
+        run: |
+          export GOROOT="$PWD/go"
+          export PATH="$GOROOT/bin:$PATH"
+          go run -C meta ./cmd bundle-tools
+          cd vscode-go/extension
+          npm ci
+          npm run vscode:prepublish
+      - name: Run tests
+        shell: bash
+        working-directory: vscode-go/extension
+        run: |
+          npm run unit-test
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            xvfb-run -a npm test
+          else
+            npm test
+          fi

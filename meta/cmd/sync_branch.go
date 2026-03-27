@@ -105,7 +105,7 @@ func resetWorktreeToBase(ctx logx.LogCtx, worktreeDir string, base string) error
 
 func deleteLocalBranchIfPresent(ctx logx.LogCtx, worktreeDir string, branch string) error {
 	listCmd := cmdx.New("git", "branch", "--list", branch).In(worktreeDir)
-	out, err := listCmd.Run(ctx, cmdx.RunOptions{CaptureStdout: true})
+	out, err := listCmd.Run(ctx, cmdx.RunOptions{CaptureStdout: true, Env: nil})
 	if err != nil {
 		return err
 	}
@@ -124,7 +124,7 @@ func findRemoteBranchHeadRef(
 
 	branchRef := "refs/heads/" + branch
 	lsRemoteCmd := cmdx.New("git", "ls-remote", "--heads", "origin", branchRef).In(worktreeDir)
-	out, err := lsRemoteCmd.Run(ctx, cmdx.RunOptions{CaptureStdout: true})
+	out, err := lsRemoteCmd.Run(ctx, cmdx.RunOptions{CaptureStdout: true, Env: nil})
 	if err != nil {
 		return None[remoteRef](), err
 	}

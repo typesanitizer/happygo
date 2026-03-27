@@ -25,7 +25,7 @@ func main() {
 			{
 				Name: "sync-branch",
 				Usage: "update and optionally push " + syncBranchPrefix +
-					"<project> for --project=go|tools|delve|all using a separate worktree",
+					"<project> for --project=go|tools|delve|vscode-go|all using a separate worktree",
 				Flags: []cli.Flag{
 					&cli.StringFlag{Name: "project", Required: true},
 					&cli.StringFlag{Name: "base"},
@@ -103,6 +103,18 @@ func main() {
 						}
 					}
 					return ws.List(logger, os.Stdout, ListOptions{Type: type_, Provenance: provenance})
+				},
+			},
+			{
+				Name:  "bundle-tools",
+				Usage: "bundle all necessary tools from workspace subtrees into go/bin/",
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					ws, err := getWorkspace()
+					if err != nil {
+						return err
+					}
+					logCtx := logx.NewLogCtx(ctx, logger)
+					return ws.bundleTools(logCtx)
 				},
 			},
 		},
