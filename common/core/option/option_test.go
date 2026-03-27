@@ -3,6 +3,7 @@ package option_test
 import (
 	"testing"
 
+	"github.com/typesanitizer/happygo/common/assert"
 	"github.com/typesanitizer/happygo/common/check"
 	. "github.com/typesanitizer/happygo/common/core/option"
 )
@@ -27,6 +28,16 @@ func TestOption(t *testing.T) {
 		h.Assertf(!opt.IsSome(), "None should not be present")
 		_, ok := opt.Get()
 		h.Assertf(!ok, "Get() on None should return false")
+	})
+
+	h.Run("Unwrap", func(h check.Harness) {
+		h.Parallel()
+
+		h.Assertf(Some(42).Unwrap() == 42, "Some(42).Unwrap() = %d, want 42", Some(42).Unwrap())
+		want := assert.AssertionError{Fmt: "precondition violation: called Unwrap on None", Args: nil}
+		h.AssertPanicsWith(want, func() {
+			_ = None[int]().Unwrap()
+		})
 	})
 
 	h.Run("ValueOr", func(h check.Harness) {
