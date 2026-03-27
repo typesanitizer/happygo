@@ -1,5 +1,6 @@
 .idea/
 .cache/
+**/testdata/rapid/**/*.fail
 # Individual go.sum files already provide integrity checking per module,
 # so go.work.sum is unnecessary.
 go.work.sum
