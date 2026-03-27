@@ -41,6 +41,17 @@ func Preconditionf(b bool, msg string, args ...any) {
 	Always(b, "precondition violation: "+msg, args...)
 }
 
+// Invariant panics if b is false, prefixing the message with
+// "invariant violation: ".
+func Invariant(b bool, msg string) {
+	Invariantf(b, "%s", msg)
+}
+
+// Invariantf is like Invariant, but with a formatted message.
+func Invariantf(b bool, msg string, args ...any) {
+	Always(b, "invariant violation: "+msg, args...)
+}
+
 // Postcondition panics if b is false, prefixing the message with
 // "postcondition violation: ".
 func Postcondition(b bool, msg string) {

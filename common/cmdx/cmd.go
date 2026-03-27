@@ -10,22 +10,22 @@ import (
 type Cmd struct {
 	name string
 	args []string
-	dir  Option[string]
+	dir  Option[AbsPath]
 }
 
 // New creates a Cmd from argv (name followed by arguments).
 func New(argv ...string) Cmd {
-	return Cmd{name: argv[0], args: argv[1:], dir: None[string]()}
+	return Cmd{name: argv[0], args: argv[1:], dir: None[AbsPath]()}
 }
 
 // In returns a copy of the Cmd with the working directory set.
-func (cmd Cmd) In(dir string) Cmd {
+func (cmd Cmd) In(dir AbsPath) Cmd {
 	cmd.dir = Some(dir)
 	return cmd
 }
 
 // Dir returns the optional working directory.
-func (cmd Cmd) Dir() Option[string] { return cmd.dir }
+func (cmd Cmd) Dir() Option[AbsPath] { return cmd.dir }
 
 // Argv returns the full command as [name, args...].
 func (cmd Cmd) Argv() []string {

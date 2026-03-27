@@ -6,11 +6,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/urfave/cli/v3"
+
 	"github.com/typesanitizer/happygo/common/collections"
 	. "github.com/typesanitizer/happygo/common/core"
 	"github.com/typesanitizer/happygo/common/errorx"
 	"github.com/typesanitizer/happygo/common/logx"
-	"github.com/urfave/cli/v3"
 )
 
 const syncBranchPrefix = "merge-bot/sync/"
@@ -33,6 +34,8 @@ func main() {
 					&cli.BoolFlag{Name: "persist"},
 				},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
+					ctx, cancel := withTimeout(ctx, 5*time.Minute, cmd.Name)
+					defer cancel()
 					ws, projects, err := resolveProjects(getWorkspace, cmd.String("project"))
 					if err != nil {
 						return err
@@ -54,6 +57,8 @@ func main() {
 					&cli.StringFlag{Name: "base"},
 				},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
+					ctx, cancel := withTimeout(ctx, 5*time.Minute, cmd.Name)
+					defer cancel()
 					ws, projects, err := resolveProjects(getWorkspace, cmd.String("project"))
 					if err != nil {
 						return err
@@ -108,12 +113,7 @@ func main() {
 		},
 	}
 
-	ctx, cancel := context.WithTimeoutCause(
-		context.Background(), 5*time.Minute,
-		errorx.Newf("nostack", "command exceeded time limit of 5 minutes"),
-	)
-	defer cancel()
-	if err := app.Run(ctx, os.Args); err != nil {
+	if err := app.Run(context.Background(), os.Args); err != nil {
 		logger.Error(err)
 		os.Exit(1)
 	}
@@ -133,4 +133,11 @@ func resolveProjects(getWorkspace func() (Workspace, error), project string) (Wo
 		return Workspace{}, nil, errorx.Newf("nostack", "invalid --project %q, not a forked folder", project)
 	}
 	return ws, []string{project}, nil
+}
+
+func withTimeout(ctx context.Context, duration time.Duration, cmdName string) (context.Context, context.CancelFunc) {
+	return context.WithTimeoutCause(
+		ctx, duration,
+		errorx.Newf("nostack", "%s exceeded time limit of %s", cmdName, duration),
+	)
 }
