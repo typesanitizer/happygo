@@ -269,11 +269,18 @@ func newProcess(process *os.Process) *gdbProcess {
 		panic("not implemented")
 	}
 
+	kxRegisterProcess(p)
+	kxTraceProcess(p, "newProcess processNil=%t", process == nil)
+
 	if process != nil {
 		p.waitChan = make(chan *os.ProcessState)
+		kxTraceProcess(p, "newProcess waitChan=%p", p.waitChan)
 		go func() {
-			state, _ := process.Wait()
+			kxTraceProcess(p, "wait goroutine start")
+			state, err := process.Wait()
+			kxTraceProcess(p, "wait goroutine process.Wait returned state=%v err=%v; sending waitChan", state, err)
 			p.waitChan <- state
+			kxTraceProcess(p, "wait goroutine send completed state=%v", state)
 		}()
 	}
 
@@ -282,23 +289,32 @@ func newProcess(process *os.Process) *gdbProcess {
 
 // Listen waits for a connection from the stub.
 func (p *gdbProcess) Listen(listener net.Listener, path, cmdline string, pid int, debugInfoDirs []string, stopReason proc.StopReason) (*proc.TargetGroup, error) {
+	kxSetProcessContext(p, path, cmdline)
+	kxTraceProcess(p, "Listen start listener=%q pid=%d stopReason=%v", listener.Addr(), pid, stopReason)
+
 	acceptChan := make(chan net.Conn)
 
 	go func() {
-		conn, _ := listener.Accept()
+		conn, err := listener.Accept()
+		kxTraceProcess(p, "Listen accept returned connNil=%t err=%v; sending acceptChan", conn == nil, err)
 		acceptChan <- conn
+		kxTraceProcess(p, "Listen accept send completed connNil=%t", conn == nil)
 	}()
 
 	select {
 	case conn := <-acceptChan:
+		kxTraceProcess(p, "Listen select received acceptChan connNil=%t", conn == nil)
 		listener.Close()
 		if conn == nil {
+			kxTraceProcess(p, "Listen returning could not connect")
 			return nil, errors.New("could not connect")
 		}
 		return p.Connect(conn, path, cmdline, pid, debugInfoDirs, stopReason)
 	case status := <-p.waitChan:
+		kxTraceProcess(p, "Listen select received waitChan status=%v", status)
 		listener.Close()
 		if err := checkRosettaExpensive(); err != nil {
+			kxTraceProcess(p, "Listen checkRosettaExpensive failed err=%v", err)
 			return nil, err
 		}
 		return nil, fmt.Errorf("stub exited while waiting for connection: %v", status)
@@ -307,14 +323,25 @@ func (p *gdbProcess) Listen(listener net.Listener, path, cmdline string, pid int
 
 // Dial attempts to connect to the stub.
 func (p *gdbProcess) Dial(addr string, path, cmdline string, pid int, debugInfoDirs []string, stopReason proc.StopReason) (*proc.TargetGroup, error) {
+	kxSetProcessContext(p, path, cmdline)
+	kxTraceProcess(p, "Dial start addr=%q pid=%d stopReason=%v", addr, pid, stopReason)
+
+	attempt := 0
 	for {
+		attempt++
 		conn, err := net.Dial("tcp", addr)
 		if err == nil {
+			kxTraceProcess(p, "Dial attempt=%d connected local=%q remote=%q", attempt, conn.LocalAddr(), conn.RemoteAddr())
 			return p.Connect(conn, path, cmdline, pid, debugInfoDirs, stopReason)
+		}
+		if attempt <= 5 || attempt%10 == 0 {
+			kxTraceProcess(p, "Dial attempt=%d err=%v", attempt, err)
 		}
 		select {
 		case status := <-p.waitChan:
+			kxTraceProcess(p, "Dial select received waitChan status=%v attempt=%d", status, attempt)
 			if err := checkRosettaExpensive(); err != nil {
+				kxTraceProcess(p, "Dial checkRosettaExpensive failed err=%v", err)
 				return nil, err
 			}
 			return nil, fmt.Errorf("stub exited while attempting to connect: %v", status)
@@ -331,13 +358,18 @@ func (p *gdbProcess) Dial(addr string, path, cmdline string, pid int, debugInfoD
 // some stubs do not provide ways to determine path and pid automatically
 // and Connect will be unable to function without knowing them.
 func (p *gdbProcess) Connect(conn net.Conn, path, cmdline string, pid int, debugInfoDirs []string, stopReason proc.StopReason) (*proc.TargetGroup, error) {
+	kxSetProcessContext(p, path, cmdline)
+	kxTraceProcess(p, "Connect start local=%q remote=%q pid=%d stopReason=%v", conn.LocalAddr(), conn.RemoteAddr(), pid, stopReason)
+
 	p.conn.conn = conn
 	p.conn.pid = pid
 	err := p.conn.handshake(p.regnames)
 	if err != nil {
+		kxTraceProcess(p, "Connect handshake failed err=%v", err)
 		conn.Close()
 		return nil, err
 	}
+	kxTraceProcess(p, "Connect handshake ok debugserver=%t", p.conn.isDebugserver)
 
 	if p.conn.isDebugserver {
 		// There are multiple problems with the 'g'/'G' commands on debugserver.
@@ -356,8 +388,14 @@ func (p *gdbProcess) Connect(conn net.Conn, path, cmdline string, pid int, debug
 
 	tgt, err := p.initialize(path, cmdline, debugInfoDirs, stopReason)
 	if err != nil {
+		kxTraceProcess(p, "Connect initialize failed err=%v", err)
 		return nil, err
 	}
+	selectedPID := 0
+	if tgt != nil && tgt.Selected != nil {
+		selectedPID = tgt.Selected.Pid()
+	}
+	kxTraceProcess(p, "Connect initialize ok targetGroup=%p selectedPID=%d", tgt, selectedPID)
 
 	if p.bi.Arch.Name != "arm64" {
 		// None of the stubs we support returns the value of fs_base or gs_base
@@ -377,6 +415,7 @@ func (p *gdbProcess) Connect(conn net.Conn, path, cmdline string, pid int, debug
 		}
 	}
 
+	kxTraceProcess(p, "Connect return targetGroup=%p loadGInstrAddr=%#x", tgt, p.loadGInstrAddr)
 	return tgt, nil
 }
 
@@ -569,9 +608,12 @@ func LLDBLaunch(cmd []string, wd string, flags proc.LaunchFlags, debugInfoDirs [
 		process.Env = env
 	}
 
+	kxLogf("LLDBLaunch start target=%q wd=%q debugserver=%t listenerNil=%t port=%q args=%q", cmd[0], wd, isDebugserver, listener == nil, port, process.Args)
 	if err = process.Start(); err != nil {
+		kxLogf("LLDBLaunch process.Start failed target=%q err=%v", cmd[0], err)
 		return nil, err
 	}
+	kxLogf("LLDBLaunch started target=%q stubPID=%d", cmd[0], process.Process.Pid)
 
 	p := newProcess(process.Process)
 	p.conn.isDebugserver = isDebugserver
@@ -582,6 +624,7 @@ func LLDBLaunch(cmd []string, wd string, flags proc.LaunchFlags, debugInfoDirs [
 	} else {
 		grp, err = p.Dial(port, cmd[0], strings.Join(cmd, " "), 0, debugInfoDirs, proc.StopLaunched)
 	}
+	kxTraceProcess(p, "LLDBLaunch connect result targetGroup=%p err=%v", grp, err)
 	if p.conn.pid != 0 && foreground && isatty.IsTerminal(os.Stdin.Fd()) {
 		// Make the target process the controlling process of the tty if it is a foreground process.
 		err := tcsetpgrp(os.Stdin.Fd(), p.conn.pid)
@@ -651,9 +694,12 @@ func LLDBAttach(pid int, path string, waitFor *proc.WaitFor, debugInfoDirs []str
 	process.Stderr = os.Stderr
 	process.SysProcAttr = sysProcAttr(false)
 
+	kxLogf("LLDBAttach start pid=%d path=%q waitFor=%v debugserver=%t listenerNil=%t port=%q args=%q", pid, path, waitFor, isDebugserver, listener == nil, port, process.Args)
 	if err = process.Start(); err != nil {
+		kxLogf("LLDBAttach process.Start failed pid=%d path=%q err=%v", pid, path, err)
 		return nil, err
 	}
+	kxLogf("LLDBAttach started pid=%d path=%q stubPID=%d", pid, path, process.Process.Pid)
 
 	p := newProcess(process.Process)
 	p.conn.isDebugserver = isDebugserver
@@ -664,6 +710,7 @@ func LLDBAttach(pid int, path string, waitFor *proc.WaitFor, debugInfoDirs []str
 	} else {
 		grp, err = p.Dial(port, path, "", pid, debugInfoDirs, proc.StopAttached)
 	}
+	kxTraceProcess(p, "LLDBAttach connect result targetGroup=%p err=%v", grp, err)
 	return grp, err
 }
 
@@ -1082,34 +1129,48 @@ func (p *gdbProcess) getCtrlC(cctx *proc.ContinueOnceContext) bool {
 // The _pid argument is unused as follow exec
 // mode is not implemented with this backend.
 func (p *gdbProcess) Detach(_pid int, kill bool) error {
+	kxTraceProcess(p, "Detach start kill=%t processNil=%t", kill, p.process == nil)
 	if kill && !p.exited {
 		err := p.conn.kill()
 		if err != nil {
 			if _, exited := err.(proc.ErrProcessExited); !exited {
+				kxTraceProcess(p, "Detach conn.kill failed err=%v", err)
 				return err
 			}
 			p.exited = true
 		}
+		kxTraceProcess(p, "Detach conn.kill done err=%v", err)
 	}
 	if !p.exited {
 		if err := p.conn.detach(); err != nil {
+			kxTraceProcess(p, "Detach conn.detach failed err=%v", err)
 			return err
 		}
 		p.detached = true
+		kxTraceProcess(p, "Detach conn.detach done")
 	}
 	if p.process != nil {
-		p.process.Kill()
-		<-p.waitChan
+		kxTraceProcess(p, "Detach process.Kill start stubPID=%d", p.process.Pid)
+		err := p.process.Kill()
+		kxTraceProcess(p, "Detach process.Kill done err=%v", err)
+		kxTraceProcess(p, "Detach waiting on waitChan=%p", p.waitChan)
+		status := <-p.waitChan
+		kxTraceProcess(p, "Detach received waitChan status=%v", status)
 		p.process = nil
 	}
+	kxTraceProcess(p, "Detach return")
 	return nil
 }
 
 func (p *gdbProcess) Close() error {
+	kxTraceProcess(p, "Close start onDetachNil=%t", p.onDetach == nil)
 	if p.onDetach != nil {
 		p.onDetach()
 	}
-	return p.bi.Close()
+	err := p.bi.Close()
+	kxTraceProcess(p, "Close done err=%v", err)
+	kxUnregisterProcess(p, fmt.Sprintf("Close err=%v", err))
+	return err
 }
 
 // Restart will restart the process from the given position.

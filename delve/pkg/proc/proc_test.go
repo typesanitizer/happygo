@@ -61,7 +61,11 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 	logflags.Setup(logConf != "", logConf, "")
+	kxLogTestf("TestMain start backend=%q buildMode=%q runtime=%q gomaxprocs=%d", testBackend, buildMode, runtime.Version(), runtime.GOMAXPROCS(0))
+	logProcessRegistryKX("proc.TestMain start")
 	protest.RunTestsWithFixtures(m)
+	logProcessRegistryKX("proc.TestMain end")
+	kxLogTestf("TestMain end backend=%q buildMode=%q", testBackend, buildMode)
 }
 
 func matchSkipConditions(conditions ...string) bool {
@@ -94,12 +98,19 @@ func withTestProcessArgs(name string, t testing.TB, wd string, args []string, bu
 	if buildMode == "pie" {
 		buildFlags |= protest.BuildModePIE
 	}
+	kxLogTestf("withTestProcessArgs start test=%q fixture=%q wd=%q args=%q buildFlags=%#x", t.Name(), name, wd, args, buildFlags)
 	fixture := protest.BuildFixture(t, name, buildFlags)
+	kxLogTestf("withTestProcessArgs built test=%q fixture=%q path=%q source=%q buildDir=%q", t.Name(), fixture.Name, fixture.Path, fixture.Source, fixture.BuildDir)
 
 	grp := startTestProcessArgs(fixture, t, wd, args)
+	kxLogTestf("withTestProcessArgs launched test=%q %s", t.Name(), describeGroupKX(grp))
+	logProcessRegistryKX("withTestProcessArgs after launch " + t.Name())
 
 	defer func() {
-		grp.Detach(true)
+		kxLogTestf("withTestProcessArgs detach start test=%q %s", t.Name(), describeGroupKX(grp))
+		err := grp.Detach(true)
+		kxLogTestf("withTestProcessArgs detach done test=%q err=%v %s", t.Name(), err, describeGroupKX(grp))
+		logProcessRegistryKX("withTestProcessArgs after detach " + t.Name())
 	}()
 
 	fn(grp.Selected, grp, fixture)
@@ -109,6 +120,8 @@ func startTestProcessArgs(fixture protest.Fixture, t testing.TB, wd string, args
 	var grp *proc.TargetGroup
 	var err error
 	var tracedir string
+
+	kxLogTestf("startTestProcessArgs launch test=%q backend=%q fixture=%q wd=%q args=%q fixturePath=%q", t.Name(), testBackend, fixture.Name, wd, args, fixture.Path)
 
 	switch testBackend {
 	case "native":
@@ -124,8 +137,10 @@ func startTestProcessArgs(fixture protest.Fixture, t testing.TB, wd string, args
 		t.Fatal("unknown backend")
 	}
 	if err != nil {
+		kxLogTestf("startTestProcessArgs launch failed test=%q backend=%q fixture=%q err=%v", t.Name(), testBackend, fixture.Name, err)
 		t.Fatal("Launch():", err)
 	}
+	kxLogTestf("startTestProcessArgs launch done test=%q %s tracedir=%q", t.Name(), describeGroupKX(grp), tracedir)
 	return grp
 }
 
@@ -5707,6 +5722,8 @@ func TestWaitForAttach(t *testing.T) {
 	started := false
 
 	cmd, waitFor := testWaitForSetup(t, &mu, &started)
+	kxLogTestf("TestWaitForAttach setup test=%q cmd=%q %s", t.Name(), cmd.Args, describeWaitForKX(waitFor))
+	logProcessRegistryKX("TestWaitForAttach before attach")
 
 	var p *proc.TargetGroup
 	var err error
@@ -5725,6 +5742,8 @@ func TestWaitForAttach(t *testing.T) {
 	}
 
 	assertNoError(err, t, "Attach")
+	kxLogTestf("TestWaitForAttach attached test=%q %s", t.Name(), describeGroupKX(p))
+	logProcessRegistryKX("TestWaitForAttach after attach")
 
 	mu.Lock()
 	if !started {
@@ -5732,7 +5751,10 @@ func TestWaitForAttach(t *testing.T) {
 	}
 	mu.Unlock()
 
-	p.Detach(true)
+	kxLogTestf("TestWaitForAttach detach start test=%q %s", t.Name(), describeGroupKX(p))
+	err = p.Detach(true)
+	kxLogTestf("TestWaitForAttach detach done test=%q err=%v %s", t.Name(), err, describeGroupKX(p))
+	logProcessRegistryKX("TestWaitForAttach after detach")
 
 	cmd.Wait()
 }
@@ -6024,14 +6046,21 @@ func TestChainedBreakpoint(t *testing.T) {
 		// === Restart ===
 
 		t.Logf("=== Restart ===")
+		kxLogTestf("TestChainedBreakpoint before restart old=%s", describeGroupKX(grp))
+		logProcessRegistryKX("TestChainedBreakpoint before restart")
 
 		grp2 := startTestProcessArgs(fixture, t, ".", []string{})
+		kxLogTestf("TestChainedBreakpoint launched restart target new=%s old=%s", describeGroupKX(grp2), describeGroupKX(grp))
+		logProcessRegistryKX("TestChainedBreakpoint after grp2 launch")
 		proc.Restart(grp2, grp, func(lbp *proc.LogicalBreakpoint, err error) {
 			t.Fatalf("discarded logical breakpoint %v: %v", lbp, err)
 		})
 
+		kxLogTestf("TestChainedBreakpoint restart copied breakpoints old=%s new=%s", describeGroupKX(grp), describeGroupKX(grp2))
 		grp = grp2
 		p = grp.Selected
+		kxLogTestf("TestChainedBreakpoint switched active group current=%s", describeGroupKX(grp))
+		logProcessRegistryKX("TestChainedBreakpoint after switching to grp2")
 
 		assertPhysCount(1, 0, 0)
 

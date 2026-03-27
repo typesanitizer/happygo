@@ -191,3 +191,26 @@ jobs:
             head)   ;;
           esac
           go test -C delve ./...
+
+  stress-delve:
+    name: stress-delve (head)
+    if: inputs.os == 'macos-latest'
+    runs-on: ${{ inputs.os }}
+    needs: build-head
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-head-toolchain
+        with:
+          os: ${{ inputs.os }}
+      - name: Stress test Delve on macOS
+        shell: bash
+        run: |
+          export GOROOT="$PWD/go"
+          export PATH="$GOROOT/bin:$PATH"
+          ./.github/scripts/delve-stress-kx.sh .artifacts/delve-stress
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: delve-stress-${{ inputs.os }}
+          path: .artifacts/delve-stress
