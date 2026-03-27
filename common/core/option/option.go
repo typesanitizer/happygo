@@ -1,6 +1,8 @@
 // Package option provides a generic optional value type.
 package option
 
+import "github.com/typesanitizer/happygo/common/assert"
+
 // Option represents a value that may or may not be present.
 type Option[T any] struct {
 	value T
@@ -29,6 +31,14 @@ func None[T any]() Option[T] {
 // Get returns the value and whether it is present.
 func (o Option[T]) Get() (T, bool) {
 	return o.value, o.valid
+}
+
+// Unwrap returns the contained value.
+//
+// Pre-condition: the Option is Some.
+func (o Option[T]) Unwrap() T {
+	assert.Preconditionf(o.valid, "called Unwrap on None")
+	return o.value
 }
 
 // IsSome reports whether the Option contains a value.

@@ -115,6 +115,12 @@ func (h Harness) Run(name string, f func(Harness)) {
 	})
 }
 
+// T returns the underlying *testing.T.
+func (h Harness) T() *testing.T {
+	h.t.Helper()
+	return h.t
+}
+
 // AssertSame compares want and got using cmp.Diff and fails with a diff if they differ.
 func AssertSame[T any](h BasicHarness, want, got T, what string) {
 	if diff := cmp.Diff(want, got); diff != "" {
