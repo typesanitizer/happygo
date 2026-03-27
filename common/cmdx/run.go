@@ -3,6 +3,7 @@ package cmdx
 import (
 	"bytes"
 	"io"
+	"os"
 	"os/exec"
 
 	"github.com/typesanitizer/happygo/common/errorx"
@@ -12,17 +13,24 @@ import (
 // RunOptions configures Cmd.Run behavior.
 type RunOptions struct {
 	CaptureStdout bool
+	TransformEnv  func([]string) []string
 }
 
 // RunOptionsDefault returns default options for Cmd.Run.
 func RunOptionsDefault() RunOptions {
-	return RunOptions{CaptureStdout: false}
+	return RunOptions{CaptureStdout: false, TransformEnv: nil}
+}
+
+// WithCaptureStdout returns a copy with CaptureStdout set.
+func (o RunOptions) WithCaptureStdout() RunOptions {
+	o.CaptureStdout = true
+	return o
 }
 
 func (cmd Cmd) Run(ctx logx.LogCtx, options RunOptions) (string, error) {
 	dir, hasDir := cmd.dir.Get()
 	if hasDir {
-		ctx.Debug("running command", "cmd", cmd, "dir", dir)
+		ctx.Debug("running command", "cmd", cmd, "dir", dir.String())
 	} else {
 		ctx.Debug("running command", "cmd", cmd)
 	}
@@ -33,7 +41,10 @@ func (cmd Cmd) Run(ctx logx.LogCtx, options RunOptions) (string, error) {
 
 	execCmd := exec.CommandContext(ctx, cmd.name, cmd.args...)
 	if hasDir {
-		execCmd.Dir = dir
+		execCmd.Dir = dir.String()
+	}
+	if options.TransformEnv != nil {
+		execCmd.Env = options.TransformEnv(os.Environ())
 	}
 
 	var capturedOutput bytes.Buffer

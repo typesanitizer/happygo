@@ -69,8 +69,7 @@ func (ws Workspace) runSyncPR(ctx logx.LogCtx, projects []string, options RunSyn
 	return nil
 }
 
-func runSyncPRProject(ctx logx.LogCtx, repoRoot string, project string, base string) error {
-	assert.Precondition(repoRoot != "", "repoRoot must be non-empty")
+func runSyncPRProject(ctx logx.LogCtx, repoRoot AbsPath, project string, base string) error {
 
 	syncBranch := syncBranchPrefix + project
 	fetchCmd := cmdx.New("git", "fetch", "origin", syncBranch).In(repoRoot)
@@ -87,7 +86,7 @@ func runSyncPRProject(ctx logx.LogCtx, repoRoot string, project string, base str
 		return nil
 	}
 	headSHA, err := cmdx.New("git", "rev-parse", "origin/"+syncBranch).In(repoRoot).
-		Run(ctx, cmdx.RunOptions{CaptureStdout: true})
+		Run(ctx, cmdx.RunOptionsDefault().WithCaptureStdout())
 	if err != nil {
 		return err
 	}
@@ -168,7 +167,7 @@ func runSyncPRProject(ctx logx.LogCtx, repoRoot string, project string, base str
 }
 
 func findOpenPR(
-	ctx logx.LogCtx, repoRoot string, base string, head string,
+	ctx logx.LogCtx, repoRoot AbsPath, base string, head string,
 ) (Option[int], error) {
 	prs, err := listOpenPRs(ctx, repoRoot, base, head)
 	if err != nil {
@@ -186,15 +185,14 @@ func findOpenPR(
 }
 
 func subtreeMetadataForSyncHead(
-	ctx logx.LogCtx, repoRoot string, project string, headSHA string,
+	ctx logx.LogCtx, repoRoot AbsPath, project string, headSHA string,
 ) (subtreeMetadata, error) {
-	assert.Precondition(repoRoot != "", "repoRoot must be non-empty")
 	assert.Precondition(project != "", "project must be non-empty")
 	assert.Precondition(headSHA != "", "headSHA must be non-empty")
 
 	var emptyMetadata subtreeMetadata
 	parentsOut, err := cmdx.New("git", "show", "--no-patch", "--format=%P", headSHA).In(repoRoot).
-		Run(ctx, cmdx.RunOptions{CaptureStdout: true})
+		Run(ctx, cmdx.RunOptionsDefault().WithCaptureStdout())
 	if err != nil {
 		return emptyMetadata, err
 	}
@@ -212,16 +210,14 @@ func subtreeMetadataForSyncHead(
 }
 
 func listOpenPRs(
-	ctx logx.LogCtx, repoRoot string, base string, head string,
+	ctx logx.LogCtx, repoRoot AbsPath, base string, head string,
 ) ([]ListOpenPRsData, error) {
-	assert.Precondition(repoRoot != "", "repoRoot must be non-empty")
-
 	listPRsCmd := cmdx.New(
 		"gh", "pr", "list",
 		"--state", "open", "--base", base, "--head", head,
 		"--json", "number,url",
 	).In(repoRoot)
-	out, err := listPRsCmd.Run(ctx, cmdx.RunOptions{CaptureStdout: true})
+	out, err := listPRsCmd.Run(ctx, cmdx.RunOptionsDefault().WithCaptureStdout())
 	if err != nil {
 		return nil, err
 	}
@@ -233,9 +229,8 @@ func listOpenPRs(
 }
 
 func ensureLabelExists(
-	ctx logx.LogCtx, repoRoot string, name string, color string, description string,
+	ctx logx.LogCtx, repoRoot AbsPath, name string, color string, description string,
 ) error {
-	assert.Precondition(repoRoot != "", "repoRoot must be non-empty")
 	assert.Precondition(name != "", "name must be non-empty")
 	assert.Precondition(color != "", "color must be non-empty")
 	assert.Precondition(description != "", "description must be non-empty")
@@ -244,7 +239,7 @@ func ensureLabelExists(
 		"gh", "label", "list",
 		"--search", name, "--json", "name", "--limit", "100",
 	).In(repoRoot)
-	out, err := listLabelsCmd.Run(ctx, cmdx.RunOptions{CaptureStdout: true})
+	out, err := listLabelsCmd.Run(ctx, cmdx.RunOptionsDefault().WithCaptureStdout())
 	if err != nil {
 		return err
 	}
