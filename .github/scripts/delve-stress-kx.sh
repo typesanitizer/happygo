@@ -69,10 +69,12 @@ run_go_test_phase() {
   local name=$1
   shift
   local log_file="$artifact_dir/${name}.log"
+  local debugserver_log_dir="$artifact_dir/${name}.debugserver-logs"
 
-  log "phase start name=${name} command=$*"
+  mkdir -p "$debugserver_log_dir"
+  log "phase start name=${name} debugserver_log_dir=${debugserver_log_dir} command=$*"
   set +e
-  "$@" 2>&1 | tee "$log_file"
+  env HAPPYGO_KX_DEBUGSERVER_LOG_DIR="$debugserver_log_dir" "$@" 2>&1 | tee "$log_file"
   local status=${PIPESTATUS[0]}
   set -e
   record_status "$name" "$status"
@@ -91,9 +93,11 @@ run_concurrent_waitfor_phase() {
   : >"$log_file"
 
   for worker in 1 2 3 4; do
+    local worker_debugserver_log_dir="$artifact_dir/${name}.worker${worker}.debugserver-logs"
+    mkdir -p "$worker_debugserver_log_dir"
     (
       set -euo pipefail
-      env PROCTEST=lldb go test -C delve ./pkg/proc \
+      env HAPPYGO_KX_DEBUGSERVER_LOG_DIR="$worker_debugserver_log_dir" PROCTEST=lldb go test -C delve ./pkg/proc \
         -run '^TestWaitForAttach$' \
         -count=20 \
         -shuffle=off \

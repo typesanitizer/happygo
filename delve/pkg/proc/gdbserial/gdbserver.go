@@ -509,12 +509,13 @@ func LLDBLaunch(cmd []string, wd string, flags proc.LaunchFlags, debugInfoDirs [
 	foreground := flags&proc.LaunchForeground != 0
 
 	var (
-		isDebugserver bool
-		listener      net.Listener
-		port          string
-		process       *exec.Cmd
-		err           error
-		hasRedirects  bool
+		isDebugserver      bool
+		listener           net.Listener
+		port               string
+		process            *exec.Cmd
+		err                error
+		hasRedirects       bool
+		debugserverLogPath string
 	)
 
 	if debugserverExecutable := getDebugServerAbsolutePath(); debugserverExecutable != "" {
@@ -550,6 +551,13 @@ func LLDBLaunch(cmd []string, wd string, flags proc.LaunchFlags, debugInfoDirs [
 
 		if logflags.LLDBServerOutput() {
 			args = append(args, "-g", "-l", "stdout")
+		} else {
+			debugserverLogPath, err = kxPrepareDebugserverLogFile(cmd[0])
+			if err != nil {
+				kxLogf("LLDBLaunch could not prepare debugserver log file target=%q err=%v", cmd[0], err)
+			} else {
+				args = append(args, "-g", "-v", "--log-file", debugserverLogPath)
+			}
 		}
 		if flags&proc.LaunchDisableASLR != 0 {
 			args = append(args, "-D")
@@ -617,6 +625,8 @@ func LLDBLaunch(cmd []string, wd string, flags proc.LaunchFlags, debugInfoDirs [
 
 	p := newProcess(process.Process)
 	p.conn.isDebugserver = isDebugserver
+	p.conn.kxDebugserverLogPath = debugserverLogPath
+	kxSetDebugserverLogConfig(p, debugserverLogPath, "cli=--log-file(default-all)+-g+-v;remote="+kxDebugserverRemoteLogBitmask)
 
 	var grp *proc.TargetGroup
 	if listener != nil {
@@ -649,11 +659,12 @@ func LLDBAttach(pid int, path string, waitFor *proc.WaitFor, debugInfoDirs []str
 	}
 
 	var (
-		isDebugserver bool
-		process       *exec.Cmd
-		listener      net.Listener
-		port          string
-		err           error
+		isDebugserver      bool
+		process            *exec.Cmd
+		listener           net.Listener
+		port               string
+		err                error
+		debugserverLogPath string
 	)
 	if debugserverExecutable := getDebugServerAbsolutePath(); debugserverExecutable != "" {
 		isDebugserver = true
@@ -675,6 +686,12 @@ func LLDBAttach(pid int, path string, waitFor *proc.WaitFor, debugInfoDirs []str
 			args = append(args, "--attach="+strconv.Itoa(pid))
 		}
 
+		debugserverLogPath, err = kxPrepareDebugserverLogFile(path)
+		if err != nil {
+			kxLogf("LLDBAttach could not prepare debugserver log file path=%q err=%v", path, err)
+		} else {
+			args = append(args, "-g", "-v", "--log-file", debugserverLogPath)
+		}
 		if canUnmaskSignals(debugserverExecutable) {
 			args = append(args, "--unmask-signals")
 		}
@@ -703,6 +720,8 @@ func LLDBAttach(pid int, path string, waitFor *proc.WaitFor, debugInfoDirs []str
 
 	p := newProcess(process.Process)
 	p.conn.isDebugserver = isDebugserver
+	p.conn.kxDebugserverLogPath = debugserverLogPath
+	kxSetDebugserverLogConfig(p, debugserverLogPath, "cli=--log-file(default-all)+-g+-v;remote="+kxDebugserverRemoteLogBitmask)
 
 	var grp *proc.TargetGroup
 	if listener != nil {
