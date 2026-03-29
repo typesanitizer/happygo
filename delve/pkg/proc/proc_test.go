@@ -6016,42 +6016,37 @@ func TestChainedBreakpoint(t *testing.T) {
 
 		assertPhysCount(0, 0, 1)
 
-		err := grp.Continue()
-		if !errors.As(err, &proc.ErrProcessExited{}) {
-			assertNoError(err, t, "Continue 4")
-		}
+		// Keep the original target stopped so withTestProcess's cleanup detaches a
+		// live process instead of only closing an already-exited backend.
 
 		// === Restart ===
 
 		t.Logf("=== Restart ===")
 
 		grp2 := startTestProcessArgs(fixture, t, ".", []string{})
+		defer func() {
+			assertNoError(grp2.Detach(true), t, "Detach restarted target")
+		}()
 		proc.Restart(grp2, grp, func(lbp *proc.LogicalBreakpoint, err error) {
 			t.Fatalf("discarded logical breakpoint %v: %v", lbp, err)
 		})
 
-		grp = grp2
-		p = grp.Selected
+		p = grp2.Selected
 
 		assertPhysCount(1, 0, 0)
 
-		assertNoError(grp.Continue(), t, "Continue 1")
+		assertNoError(grp2.Continue(), t, "Continue 1")
 		assertCallerLine(t, p, "continue 1", 21)
 
-		assertNoError(grp.Continue(), t, "Continue 2")
+		assertNoError(grp2.Continue(), t, "Continue 2")
 		assertCallerLine(t, p, "continue 2", 25)
 
 		assertPhysCount(0, 1, 0)
 
-		assertNoError(grp.Continue(), t, "Continue 3")
+		assertNoError(grp2.Continue(), t, "Continue 3")
 		assertCallerLine(t, p, "continue 3", 28)
 
 		assertPhysCount(0, 0, 1)
-
-		err = grp.Continue()
-		if !errors.As(err, &proc.ErrProcessExited{}) {
-			assertNoError(err, t, "Continue 4")
-		}
 	})
 }
 
