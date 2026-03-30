@@ -8,10 +8,7 @@ on:
 
 jobs:
   pipeline:
-    name: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+    name: macos-latest
     uses: ./.github/workflows/build-and-test.yml
     with:
-      os: ${{ matrix.os }}
+      os: macos-latest

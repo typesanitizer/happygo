@@ -47,8 +47,9 @@ type gdbConn struct {
 	goarch                string
 	goos                  string
 
-	useXcmd       bool // forces writeMemory to use the 'X' command
-	newRRCmdStyle bool // forces qRRCmd to use the post-5.8.0 style always
+	useXcmd              bool // forces writeMemory to use the 'X' command
+	newRRCmdStyle        bool // forces qRRCmd to use the post-5.8.0 style always
+	kxDebugserverLogPath string
 
 	log logflags.Logger
 }
@@ -107,6 +108,9 @@ func (conn *gdbConn) handshake(regnames *gdbRegnames) error {
 	conn.sendack('+')
 
 	conn.disableAck()
+	if err := conn.enableDebugserverLoggingKX(); err != nil {
+		kxTraceConn(conn, "enableDebugserverLoggingKX failed err=%v", err)
+	}
 
 	// Try to enable thread suffixes for the command 'g' and 'p'
 	if _, err := conn.exec([]byte("$QThreadSuffixSupported"), "init"); err != nil {
@@ -189,6 +193,20 @@ func (conn *gdbConn) handshake(regnames *gdbRegnames) error {
 	return nil
 }
 
+func (conn *gdbConn) enableDebugserverLoggingKX() error {
+	if !conn.isDebugserver {
+		return nil
+	}
+	cmd := []byte("$QSetLogging:bitmask=" + kxDebugserverRemoteLogBitmask + ";")
+	kxTraceConn(conn, "enableDebugserverLoggingKX sending flags=%q", kxDebugserverRemoteLogBitmask)
+	resp, err := conn.exec(cmd, "init/QSetLogging")
+	if err != nil {
+		return err
+	}
+	kxTraceConn(conn, "enableDebugserverLoggingKX response=%s", kxPacketPreview(resp, false))
+	return nil
+}
+
 // qSupported interprets qSupported responses.
 func (conn *gdbConn) qSupported(multiprocess bool) (features map[string]bool, err error) {
 	q := qSupportedSimple
@@ -222,6 +240,9 @@ func (conn *gdbConn) disableAck() error {
 	_, err := conn.exec([]byte("$QStartNoAckMode"), "init/disableAck")
 	if err == nil {
 		conn.ack = false
+		kxTraceConn(conn, "disableAck enabled")
+	} else {
+		kxTraceConn(conn, "disableAck failed err=%v", err)
 	}
 	return err
 }
@@ -694,29 +715,40 @@ var errThreadBlocked = errors.New("thread blocked")
 func (conn *gdbConn) waitForvContStop(context, threadID string, tu *threadUpdater) (stopPacket, error) {
 	count := 0
 	failed := false
+	kxTraceConn(conn, "waitForvContStop start context=%q threadID=%q", context, threadID)
 	for {
 		conn.conn.SetReadDeadline(time.Now().Add(heartbeatInterval))
 		resp, err := conn.recv(nil, context, false)
 		conn.conn.SetReadDeadline(time.Time{})
 		if neterr, isneterr := err.(net.Error); isneterr && neterr.Timeout() {
+			kxTraceConn(conn, "waitForvContStop timeout context=%q threadID=%q count=%d failed=%t", context, threadID, count, failed)
 			// Debugserver sometimes forgets to inform us that inferior stopped,
 			// sending this status request after a timeout helps us get unstuck.
 			// Debugserver will not respond to this request unless inferior is
 			// already stopped.
 			if conn.isDebugserver {
-				conn.send([]byte("$?"))
+				if err := conn.send([]byte("$?")); err != nil {
+					kxTraceConn(conn, "waitForvContStop status query send failed err=%v", err)
+					return stopPacket{}, err
+				}
 			}
 			if count > 1 && context == "singlestep" {
 				failed = true
-				conn.sendCtrlC()
+				if err := conn.sendCtrlC(); err != nil {
+					kxTraceConn(conn, "waitForvContStop sendCtrlC failed err=%v", err)
+					return stopPacket{}, err
+				}
 			}
 			count++
 		} else if failed {
+			kxTraceConn(conn, "waitForvContStop returning errThreadBlocked err=%v", err)
 			return stopPacket{}, errThreadBlocked
 		} else if err != nil {
+			kxTraceConn(conn, "waitForvContStop recv failed err=%v", err)
 			return stopPacket{}, err
 		} else {
 			repeat, sp, err := conn.parseStopPacket(resp, threadID, tu)
+			kxTraceConn(conn, "waitForvContStop parsed repeat=%t sp.threadID=%q sp.sig=%d sp.reason=%q sp.watchAddr=%#x err=%v", repeat, sp.threadID, sp.sig, sp.reason, sp.watchAddr, err)
 			if !repeat {
 				return sp, err
 			}
@@ -757,6 +789,7 @@ const (
 
 // executes 'vCont' (continue/step) command
 func (conn *gdbConn) parseStopPacket(resp []byte, threadID string, tu *threadUpdater) (repeat bool, sp stopPacket, err error) {
+	kxTraceConn(conn, "parseStopPacket start threadID=%q resp=%s", threadID, kxPacketPreview(resp, false))
 	switch resp[0] {
 	case 'T':
 		if len(resp) < 3 {
@@ -863,6 +896,7 @@ func (conn *gdbConn) parseStopPacket(resp []byte, threadID string, tu *threadUpd
 		}
 
 		parseMachException(&sp, metype, medata)
+		kxTraceConn(conn, "parseStopPacket stop threadID=%q sig=%d reason=%q watchAddr=%#x watchReg=%d jstopinfo=%d regs=%d", sp.threadID, sp.sig, sp.reason, sp.watchAddr, sp.watchReg, len(sp.jstopInfo), len(sp.regs))
 
 		return false, sp, nil
 
@@ -873,11 +907,13 @@ func (conn *gdbConn) parseStopPacket(resp []byte, threadID string, tu *threadUpd
 			semicolon = len(resp)
 		}
 		status, _ := strconv.ParseUint(string(resp[1:semicolon]), 16, 8)
+		kxTraceConn(conn, "parseStopPacket exit kind=%c status=%d", resp[0], status)
 		return false, stopPacket{}, proc.ErrProcessExited{Pid: conn.pid, Status: int(status)}
 
 	case 'N':
 		// we were singlestepping the thread and the thread exited
 		sp.threadID = threadID
+		kxTraceConn(conn, "parseStopPacket thread exited during single step threadID=%q", threadID)
 		return false, sp, nil
 
 	case 'O':
@@ -886,11 +922,14 @@ func (conn *gdbConn) parseStopPacket(resp []byte, threadID string, tu *threadUpd
 			n, _ := strconv.ParseUint(string(resp[i:i+2]), 16, 8)
 			data = append(data, uint8(n))
 		}
+		kxTraceConn(conn, "parseStopPacket stdout data=%s", kxPacketPreview(data, false))
 		os.Stdout.Write(data)
 		return true, sp, nil
 
 	default:
-		return false, sp, fmt.Errorf("unexpected response for vCont %c", resp[0])
+		err := fmt.Errorf("unexpected response for vCont %c", resp[0])
+		kxTraceConn(conn, "parseStopPacket unexpected err=%v", err)
+		return false, sp, err
 	}
 }
 
@@ -899,7 +938,11 @@ const ctrlC = 0x03 // the ASCII character for ^C
 // executes a ctrl-C on the line
 func (conn *gdbConn) sendCtrlC() error {
 	conn.log.Debug("<- interrupt")
+	kxTraceConn(conn, "sendCtrlC")
 	_, err := conn.conn.Write([]byte{ctrlC})
+	if err != nil {
+		kxTraceConn(conn, "sendCtrlC failed err=%v", err)
+	}
 	return err
 }
 
@@ -1320,10 +1363,14 @@ func (conn *gdbConn) memoryRegionInfo(addr uint64) (*memoryRegionInfo, error) {
 //
 //	https://sourceware.org/gdb/onlinedocs/gdb/Overview.html#Overview
 func (conn *gdbConn) exec(cmd []byte, context string) ([]byte, error) {
+	kxTraceConn(conn, "exec start context=%q cmd=%s", context, kxPacketPreview(cmd, false))
 	if err := conn.send(cmd); err != nil {
+		kxTraceConn(conn, "exec send failed context=%q err=%v", context, err)
 		return nil, err
 	}
-	return conn.recv(cmd, context, false)
+	resp, err := conn.recv(cmd, context, false)
+	kxTraceConn(conn, "exec done context=%q resp=%s err=%v", context, kxPacketPreview(resp, false), err)
+	return resp, err
 }
 
 const hexdigit = "0123456789abcdef"
@@ -1332,6 +1379,7 @@ func (conn *gdbConn) send(cmd []byte) error {
 	if len(cmd) == 0 || cmd[0] != '$' {
 		panic("gdb protocol error: command doesn't start with '$'")
 	}
+	kxTraceConn(conn, "send start cmd=%s", kxPacketPreview(cmd, false))
 
 	// append checksum to packet
 	cmd = append(cmd, '#')
@@ -1349,17 +1397,21 @@ func (conn *gdbConn) send(cmd []byte) error {
 		}
 		_, err := conn.conn.Write(cmd)
 		if err != nil {
+			kxTraceConn(conn, "send write failed attempt=%d err=%v", attempt, err)
 			return err
 		}
 
 		if !conn.ack {
+			kxTraceConn(conn, "send complete without ack")
 			break
 		}
 
 		if conn.readack() {
+			kxTraceConn(conn, "send ack received attempt=%d", attempt)
 			break
 		}
 		if attempt > conn.maxTransmitAttempts {
+			kxTraceConn(conn, "send giving up err=%v", ErrTooManyAttempts)
 			return ErrTooManyAttempts
 		}
 		attempt++
@@ -1369,16 +1421,19 @@ func (conn *gdbConn) send(cmd []byte) error {
 
 func (conn *gdbConn) recv(cmd []byte, context string, binary bool) (resp []byte, err error) {
 	attempt := 0
+	kxTraceConn(conn, "recv start context=%q binary=%t cmd=%s", context, binary, kxPacketPreview(cmd, false))
 	for {
 		var err error
 		resp, err = conn.rdr.ReadBytes('#')
 		if err != nil {
+			kxTraceConn(conn, "recv ReadBytes failed attempt=%d err=%v", attempt, err)
 			return nil, err
 		}
 
 		// read checksum
 		_, err = io.ReadFull(conn.rdr, conn.inbuf[:2])
 		if err != nil {
+			kxTraceConn(conn, "recv checksum read failed attempt=%d err=%v", attempt, err)
 			return nil, err
 		}
 		if logflags.GdbWire() {
@@ -1410,6 +1465,7 @@ func (conn *gdbConn) recv(cmd []byte, context string, binary bool) (resp []byte,
 		}
 
 		if !conn.ack {
+			kxTraceConn(conn, "recv got packet without ack raw=%s checksum=%q", kxPacketPreview(resp, binary), string(conn.inbuf[:2]))
 			break
 		}
 
@@ -1418,18 +1474,22 @@ func (conn *gdbConn) recv(cmd []byte, context string, binary bool) (resp []byte,
 			// notification packet, this is weird since we specifically claimed that
 			// we don't support notifications of any kind, but it should be safe to
 			// ignore regardless.
+			kxTraceConn(conn, "recv ignoring notification raw=%s", kxPacketPreview(resp, binary))
 			continue
 		}
 
 		if checksumok(resp, conn.inbuf[:2]) {
 			conn.sendack('+')
+			kxTraceConn(conn, "recv checksum ok attempt=%d raw=%s checksum=%q", attempt, kxPacketPreview(resp, binary), string(conn.inbuf[:2]))
 			break
 		}
 		if attempt > conn.maxTransmitAttempts {
 			conn.sendack('+')
+			kxTraceConn(conn, "recv giving up err=%v raw=%s checksum=%q", ErrTooManyAttempts, kxPacketPreview(resp, binary), string(conn.inbuf[:2]))
 			return nil, ErrTooManyAttempts
 		}
 		attempt++
+		kxTraceConn(conn, "recv checksum mismatch attempt=%d raw=%s checksum=%q", attempt, kxPacketPreview(resp, binary), string(conn.inbuf[:2]))
 		conn.sendack('-')
 	}
 
@@ -1444,9 +1504,12 @@ func (conn *gdbConn) recv(cmd []byte, context string, binary bool) (resp []byte,
 		if cmd != nil {
 			cmdstr = string(cmd)
 		}
-		return nil, &GdbProtocolError{context, cmdstr, string(resp)}
+		err := &GdbProtocolError{context, cmdstr, string(resp)}
+		kxTraceConn(conn, "recv protocol error resp=%s err=%v", kxPacketPreview(resp, binary), err)
+		return nil, err
 	}
 
+	kxTraceConn(conn, "recv decoded context=%q resp=%s", context, kxPacketPreview(resp, binary))
 	return resp, nil
 }
 
