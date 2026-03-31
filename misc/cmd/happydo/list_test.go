@@ -8,7 +8,7 @@ import (
 	"github.com/typesanitizer/happygo/common/check"
 	. "github.com/typesanitizer/happygo/common/core"
 	"github.com/typesanitizer/happygo/common/logx"
-	"github.com/typesanitizer/happygo/meta/internal/config"
+	"github.com/typesanitizer/happygo/misc/internal/config"
 )
 
 func TestList(t *testing.T) {

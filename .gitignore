@@ -5,3 +5,9 @@
 # so go.work.sum is unnecessary.
 go.work.sum
 node_modules/
+
+# Snapshots from Vim etc.
+**/*.swp
+
+# Accidentally built binaries at the root
+/happydo

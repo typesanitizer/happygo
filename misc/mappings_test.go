@@ -1,4 +1,4 @@
-package meta_test
+package misc_test
 
 import (
 	"maps"
@@ -14,7 +14,7 @@ import (
 	"github.com/typesanitizer/happygo/common/check"
 	"github.com/typesanitizer/happygo/common/collections"
 	"github.com/typesanitizer/happygo/common/iterx"
-	"github.com/typesanitizer/happygo/meta/internal/config"
+	"github.com/typesanitizer/happygo/misc/internal/config"
 )
 
 func TestWorkspaceConfig(t *testing.T) {

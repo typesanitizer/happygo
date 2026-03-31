@@ -1,4 +1,4 @@
-module github.com/typesanitizer/happygo/meta
+module github.com/typesanitizer/happygo/misc
 
 go 1.24.0
 
