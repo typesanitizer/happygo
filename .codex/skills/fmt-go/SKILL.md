@@ -1,8 +1,9 @@
-<!-- FIXME(issue: typesanitizer/happygo#56): Remove this skill in favor of a simpler command. -->
 ---
 name: fmt-go
 description: Format Go code using goimports with proper grouping.
 ---
+
+<!-- FIXME(issue: typesanitizer/happygo#56): Remove this skill in favor of a simpler command. -->
 
 # Format Go Code
 
