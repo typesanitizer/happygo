@@ -11,11 +11,11 @@ import (
 	. "github.com/typesanitizer/happygo/common/core"
 	"github.com/typesanitizer/happygo/common/errorx"
 	"github.com/typesanitizer/happygo/common/logx"
-	"github.com/typesanitizer/happygo/meta/internal/config"
+	"github.com/typesanitizer/happygo/misc/internal/config"
 )
 
 func loadWorkspaceConfig(repoRoot AbsPath) (_ config.WorkspaceConfig, retErr error) {
-	path := repoRoot.JoinComponents("meta", "repo-configuration.json").String()
+	path := repoRoot.JoinComponents("misc", "repo-configuration.json").String()
 	f, err := os.Open(path)
 	if err != nil {
 		return config.WorkspaceConfig{}, errorx.Wrapf("+stacks", err, "open %s", path)

@@ -98,7 +98,7 @@ jobs:
           push = (os.getenv("DISPATCH_PUSH") or "true").lower() == "true"
 
           # --persist: skip worktree cleanup since the CI runner is ephemeral.
-          branch_cmd = ["go", "run", "-C", "meta", "./cmd", "sync-branch", "--project", project, "--base", base, "--persist"]
+          branch_cmd = ["go", "run", "-C", "misc", "./cmd/happydo", "sync-branch", "--project", project, "--base", base, "--persist"]
           if push:
               branch_cmd.append("--push")
 
@@ -106,6 +106,6 @@ jobs:
           subprocess.run(branch_cmd, check=True)
 
           if push:
-              pr_cmd = ["go", "run", "-C", "meta", "./cmd", "sync-pr", "--project", project, "--base", base]
+              pr_cmd = ["go", "run", "-C", "misc", "./cmd/happydo", "sync-pr", "--project", project, "--base", base]
               print(" ".join(pr_cmd))
               subprocess.run(pr_cmd, check=True)

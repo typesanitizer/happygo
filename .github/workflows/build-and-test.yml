@@ -105,7 +105,7 @@ jobs:
         run: |
           export GOROOT="$PWD/go"
           export PATH="$GOROOT/bin:$PATH"
-          patterns=$(go run ./meta/cmd list --type=go-module --provenance=first-party | sed 's|.*|./&/...|')
+          patterns=$(go run ./misc/cmd/happydo list --type=go-module --provenance=first-party | sed 's|.*|./&/...|')
           go test $patterns
 
   lint-first-party:
@@ -127,7 +127,7 @@ jobs:
           export GOROOT="$PWD/go"
           export PATH="$GOROOT/bin:$PATH"
           export CGO_ENABLED=0
-          patterns=$(go run ./meta/cmd list --type=go-module --provenance=first-party | sed 's|.*|./&/...|')
+          patterns=$(go run ./misc/cmd/happydo list --type=go-module --provenance=first-party | sed 's|.*|./&/...|')
           # Version is pinned via the tool dependency in common/go.mod;
           # see NOTE(id: workspace-tool-directives).
           go tool golangci-lint run $patterns
