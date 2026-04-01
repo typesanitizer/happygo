@@ -167,15 +167,14 @@ func formatLease(branch string, remoteHead Option[remoteRef]) string {
 func createSyncWorktree(
 	ctx logx.LogCtx, repoRoot AbsPath, base string,
 ) (AbsPath, func() error, error) {
-	tmpRoot := repoRoot.JoinComponents(".cache", "tmp").String()
-	if err := os.MkdirAll(tmpRoot, 0o755); err != nil {
+	tmpRoot := repoRoot.JoinComponents(".cache", "tmp")
+	if err := tmpRoot.MkdirAll(0o755); err != nil {
 		return AbsPath{}, nil, errorx.Wrapf("+stacks", err, "create temp root %q", tmpRoot)
 	}
-	worktreeDirStr, err := os.MkdirTemp(tmpRoot, "meta-sync-")
+	worktreeDir, err := tmpRoot.MkdirTemp("meta-sync-")
 	if err != nil {
 		return AbsPath{}, nil, errorx.Wrapf("+stacks", err, "create sync worktree")
 	}
-	worktreeDir := NewAbsPath(worktreeDirStr)
 
 	worktreeAdded := false
 	cleanup := func() error {

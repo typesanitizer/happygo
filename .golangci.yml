@@ -25,6 +25,9 @@ linters:
       - linters: [staticcheck]
         text: "ST1001"
         source: 'common/core'
+      - linters: [forbidigo]
+        path: ^common/core/pathx/pathx.go$
+        source: 'os\.(MkdirAll|MkdirTemp)'
     # Upstream projects are excluded; linting only applies to our code.
     # SYNC(id: linter-exclusions)
     paths:
@@ -81,5 +84,9 @@ linters:
           msg: use Harness.Run instead of t.Run
         - pattern: ^testing\.T\.Parallel$
           msg: use Harness.Parallel instead of t.Parallel
+        - pattern: ^os\.MkdirAll$
+          msg: use AbsPath.MkdirAll instead of os.MkdirAll
+        - pattern: ^os\.MkdirTemp$
+          msg: use AbsPath.MkdirTemp instead of os.MkdirTemp
         - pattern: ^pgregory\.net/rapid\.T\.(Errorf|Error|Fatalf|Fatal|FailNow|Fail)$
           msg: use check.NewBasic(t) instead of calling rapid.T methods directly
