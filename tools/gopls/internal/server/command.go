@@ -1809,6 +1809,19 @@ func optionsStringToMap(options string) (map[string][]string, error) {
 	return optionsMap, nil
 }
 
+func (c *commandHandler) ImplementInterface(ctx context.Context, args command.ImplementInterfaceArgs) error {
+	return c.run(ctx, commandConfig{
+		progress: "Implement interface X",
+		forURI:   args.Location.URI,
+	}, func(ctx context.Context, deps commandDeps) error {
+		edits, err := golang.ImplementInterface(ctx, deps.snapshot, args.Location, args.Interface)
+		if err != nil {
+			return err
+		}
+		return applyChanges(ctx, c.s.client, edits)
+	})
+}
+
 func (c *commandHandler) ModifyTags(ctx context.Context, args command.ModifyTagsArgs) error {
 	return c.run(ctx, commandConfig{
 		progress: "Modifying tags",
