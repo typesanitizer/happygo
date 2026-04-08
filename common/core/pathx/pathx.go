@@ -59,18 +59,6 @@ func (p AbsPath) MkdirAll(perm os.FileMode) error {
 	return os.MkdirAll(p.value, perm)
 }
 
-// MkdirTemp creates a temporary directory inside p.
-//
-// Pre-condition: pattern contains no path separators.
-func (p AbsPath) MkdirTemp(pattern string) (AbsPath, error) {
-	assert.Preconditionf(hasNoPathSeparator(pattern), "pattern contains path separator: %q", pattern)
-	dir, err := os.MkdirTemp(p.value, pattern)
-	if err != nil {
-		return AbsPath{}, err
-	}
-	return NewAbsPath(dir), nil
-}
-
 func (p AbsPath) RemoveAll() error {
 	return os.RemoveAll(p.value)
 }
@@ -116,7 +104,7 @@ func (p AbsPath) JoinComponents(pathElems ...string) AbsPath {
 	parts := make([]string, 0, len(pathElems)+1)
 	parts = append(parts, p.value)
 	for _, elem := range pathElems {
-		assert.Preconditionf(hasNoPathSeparator(elem), "path element contains separator: %q", elem)
+		assert.Preconditionf(!HasPathSeparators(elem), "path element contains separator: %q", elem)
 		parts = append(parts, elem)
 	}
 	return NewAbsPath(filepath.Join(parts...))
@@ -148,6 +136,23 @@ func NewRelPath(path string) RelPath {
 
 func (p RelPath) String() string {
 	return p.value
+}
+
+func (p RelPath) Join(rel RelPath) RelPath {
+	return NewRelPath(filepath.Join(p.value, rel.value))
+}
+
+// JoinComponents joins individual path components onto p.
+//
+// Pre-condition: no element contains a path separator.
+func (p RelPath) JoinComponents(pathElems ...string) RelPath {
+	parts := make([]string, 0, len(pathElems)+1)
+	parts = append(parts, p.value)
+	for _, elem := range pathElems {
+		assert.Preconditionf(!HasPathSeparators(elem), "path element contains separator: %q", elem)
+		parts = append(parts, elem)
+	}
+	return NewRelPath(filepath.Join(parts...))
 }
 
 func (p RelPath) Components() iter.Seq[string] {
@@ -209,16 +214,17 @@ func (p RelPath) lexicallyContainsUnix() bool {
 	return true
 }
 
-func hasNoPathSeparator(s string) bool {
+// HasPathSeparators reports whether s contains any path separators.
+func HasPathSeparators(s string) bool {
 	if runtime.GOOS == "windows" {
 		for i := range len(s) {
 			if s[i] == '\\' || s[i] == '/' {
-				return false
+				return true
 			}
 		}
-		return true
+		return false
 	}
-	return !strings.Contains(s, "/")
+	return strings.Contains(s, "/")
 }
 
 type RootRelPath struct {
@@ -240,4 +246,9 @@ func (p RootRelPath) String() string {
 
 func (p RootRelPath) AsAbsPath() AbsPath {
 	return p.root.Join(p.value)
+}
+
+// Rel returns the anchored relative portion of p, discarding the root.
+func (p RootRelPath) Rel() RelPath {
+	return p.value
 }

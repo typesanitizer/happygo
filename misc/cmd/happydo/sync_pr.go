@@ -62,7 +62,7 @@ func (ws Workspace) runSyncPR(ctx logx.LogCtx, projects []string, options RunSyn
 	assert.Precondition(len(projects) > 0, "must sync 1+ projects")
 	base := options.Base.ValueOr("main")
 	for _, project := range projects {
-		if err := runSyncPRProject(ctx, ws.RepoRoot, project, base); err != nil {
+		if err := runSyncPRProject(ctx, ws.FS.Root(), project, base); err != nil {
 			return err
 		}
 	}
@@ -70,7 +70,6 @@ func (ws Workspace) runSyncPR(ctx logx.LogCtx, projects []string, options RunSyn
 }
 
 func runSyncPRProject(ctx logx.LogCtx, repoRoot AbsPath, project string, base string) error {
-
 	syncBranch := syncBranchPrefix + project
 	fetchCmd := cmdx.New("git", "fetch", "origin", syncBranch).In(repoRoot)
 	if _, err := fetchCmd.Run(ctx, cmdx.RunOptionsDefault()); err != nil {

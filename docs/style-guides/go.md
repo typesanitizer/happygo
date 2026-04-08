@@ -7,6 +7,35 @@ This guide applies to non-forked folders only (for example, `common/`, `meta/`, 
 - Group order: stdlib, third-party, monorepo (`github.com/typesanitizer/happygo/...`).
 - `github.com/typesanitizer/happygo/common/core` should be imported with `.`.
 
+## Naming
+
+### Avoid negation in names
+
+```go
+type ABC struct {
+    xyzDisabled bool // ❌
+}
+
+func HasNoPathSeparators(p string) bool // ❌
+```
+
+Use positive naming, letting the caller handle negation.
+
+```go
+type ABC struct {
+    xyzEnabled bool // ✔️
+}
+
+func HasPathSeparators(p string) bool // ✔️
+```
+
+**Q**: Won't this lead to potential bugs with default initialization
+or higher verbosity when the more common desired setting is `true`?
+
+**A**: If that kind of default initialization is desired, expose a helper
+function. Higher verbosity is not a reason to reduce readability.
+Overall the risk of confusing code due to double negations is higher.
+
 ## 'Type-unique' arguments bundled as first parameter
 
 Examples:

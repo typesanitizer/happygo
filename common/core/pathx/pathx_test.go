@@ -1,9 +1,11 @@
 package pathx_test
 
 import (
+	"fmt"
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strings"
 	"testing"
 
 	"pgregory.net/rapid"
@@ -13,6 +15,7 @@ import (
 	. "github.com/typesanitizer/happygo/common/check/prelude"
 	"github.com/typesanitizer/happygo/common/core/pathx"
 	"github.com/typesanitizer/happygo/common/core/pathx/pathx_testkit"
+	"github.com/typesanitizer/happygo/common/errorx"
 )
 
 func TestMakeRelativeTo(t *testing.T) {
@@ -125,7 +128,6 @@ func TestRelPathComponents(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		h.Run(tt.path, func(h check.Harness) {
 			got := make([]string, 0)
 			for c := range pathx.NewRelPath(tt.path).Components() {
@@ -152,7 +154,6 @@ func TestLexicallyContains(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		h.Run(tt.path, func(h check.Harness) {
 			got := root.LexicallyContains(pathx.NewRelPath(tt.path))
 			h.Assertf(got == tt.want, "LexicallyContains(%q) = %v, want %v", tt.path, got, tt.want)
@@ -177,6 +178,59 @@ func TestRootRelPathBasics(t *testing.T) {
 	rootRelPath := pathx.NewRootRelPath(root, rel)
 	check.AssertSame(h, rel.String(), rootRelPath.String(), "RootRelPath.String()")
 	check.AssertSame(h, root.Join(rel).String(), rootRelPath.AsAbsPath().String(), "RootRelPath.AsAbsPath()")
+	check.AssertSame(h, rel.String(), rootRelPath.Rel().String(), "RootRelPath.Rel()")
+}
+
+// TestPathFormatting verifies that the path types implement [fmt.Stringer]
+// so `%s` / `%q` format them by their String() value, letting callers of
+// fmt.Sprintf and errorx.Wrapf pass path types directly without .String().
+func TestPathFormatting(t *testing.T) {
+	h := check.New(t)
+
+	sep := string(filepath.Separator)
+	absStr := sep + filepath.Join("tmp", "x")
+	relStr := filepath.Join("a", "b")
+	rootRelStr := relStr // RootRelPath.String() returns just the relative portion.
+
+	abs := pathx.NewAbsPath(absStr)
+	rel := pathx.NewRelPath(relStr)
+	rootRel := pathx.NewRootRelPath(abs, rel)
+
+	tests := []struct {
+		name      string
+		value     fmt.Stringer
+		want      string
+		wantQuote string
+	}{
+		{name: "AbsPath", value: abs, want: absStr, wantQuote: `"` + absStr + `"`},
+		{name: "RelPath", value: rel, want: relStr, wantQuote: `"` + relStr + `"`},
+		{name: "RootRelPath", value: rootRel, want: rootRelStr, wantQuote: `"` + rootRelStr + `"`},
+	}
+
+	baseErr := errorx.Newf("nostack", "base")
+
+	for _, tt := range tests {
+		h.Run(tt.name, func(h check.Harness) {
+			h.Parallel()
+
+			var sBuilder strings.Builder
+			_, err := fmt.Fprintf(&sBuilder, "%s", tt.value)
+			h.NoErrorf(err, "fmt.Fprintf %%s")
+			gotS := sBuilder.String()
+			gotQ := fmt.Sprintf("%q", tt.value)
+
+			gotErrS := errorx.Wrapf("nostack", baseErr, "path: %s", tt.value).Error()
+			wantErrS := "path: " + tt.want + ": base"
+
+			gotErrQ := errorx.Wrapf("nostack", baseErr, "path: %q", tt.value).Error()
+			wantErrQ := "path: " + tt.wantQuote + ": base"
+
+			check.AssertSame(h, tt.want, gotS, "fmt.Sprintf %s")
+			check.AssertSame(h, tt.wantQuote, gotQ, "fmt.Sprintf %q")
+			check.AssertSame(h, wantErrS, gotErrS, "errorx.Wrapf %s")
+			check.AssertSame(h, wantErrQ, gotErrQ, "errorx.Wrapf %q")
+		})
+	}
 }
 
 func TestResolveAbsPath(t *testing.T) {
@@ -198,31 +252,36 @@ func TestRejectsEmptyPaths(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		h.Run(tt.name, func(h check.Harness) {
 			h.AssertPanicsWith(want, tt.call)
 		})
 	}
 }
 
-func TestMkdirTempRejectsPathSeparatorInPattern(t *testing.T) {
+func TestHasPathSeparators(t *testing.T) {
 	h := check.New(t)
-	root := pathx.NewAbsPath(t.TempDir())
 
-	patterns := []string{"a/b"}
-	if runtime.GOOS == "windows" {
-		patterns = append(patterns, `a\b`)
+	tests := []struct {
+		name  string
+		value string
+		want  bool
+	}{
+		{name: "empty", value: "", want: false},
+		{name: "plain", value: "abc", want: false},
+		{name: "slash", value: "a/b", want: true},
 	}
-	for _, pattern := range patterns {
-		pattern := pattern
-		h.Run(pattern, func(h check.Harness) {
-			want := assert.AssertionError{
-				Fmt:  "precondition violation: pattern contains path separator: %q",
-				Args: []any{pattern},
-			}
-			h.AssertPanicsWith(want, func() {
-				_, _ = root.MkdirTemp(pattern)
-			})
+	if runtime.GOOS == "windows" {
+		tests = append(tests, struct {
+			name  string
+			value string
+			want  bool
+		}{name: "backslash", value: `a\b`, want: true})
+	}
+
+	for _, tt := range tests {
+		h.Run(tt.name, func(h check.Harness) {
+			got := pathx.HasPathSeparators(tt.value)
+			h.Assertf(got == tt.want, "HasPathSeparators(%q) = %v, want %v", tt.value, got, tt.want)
 		})
 	}
 }

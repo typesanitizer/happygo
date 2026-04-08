@@ -11,3 +11,4 @@ node_modules/
 
 # Accidentally built binaries at the root
 /happydo
+/misc/happydo

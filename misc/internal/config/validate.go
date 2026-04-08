@@ -106,7 +106,7 @@ func validateBranchMappings(mappingsJSON []BranchMappingJSON, forkedRepos collec
 			}
 		}
 
-		for _, forkedRepo := range collections.SortedValues(&forkedRepos) {
+		for _, forkedRepo := range collections.SortedValues(forkedRepos) {
 			if _, ok := upstreamMap.ByGitHubRepo[forkedRepo]; !ok {
 				err = errorx.Join(err, errorx.Newf("nostack", "branch mapping %q missing upstream project %q", mappingJSON.LocalBranch, forkedRepo))
 			}

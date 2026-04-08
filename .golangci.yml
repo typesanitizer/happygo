@@ -51,6 +51,8 @@ linters:
               desc: "use common/logx instead of log/slog"
             - pkg: "github.com/charmbracelet/log"
               desc: "use common/logx instead of charmbracelet/log directly"
+            - pkg: "github.com/spf13/afero"
+              desc: "use common/fsx instead of spf13/afero directly"
     importas:
       no-unaliased: true
       alias:
