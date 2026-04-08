@@ -49,7 +49,7 @@ func (s *Set[T]) IsSubsetOf(bigger *Set[T]) bool {
 }
 
 // SortedValues returns the elements of a set with an ordered element type in sorted order.
-func SortedValues[T cmp.Ordered](s *Set[T]) []T {
+func SortedValues[T cmp.Ordered](s Set[T]) []T {
 	values := make([]T, 0, s.Len())
 	for v := range s.values {
 		values = append(values, v)

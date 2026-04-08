@@ -1,13 +1,13 @@
 package main
 
 import (
-	"os"
 	"strings"
 
 	"github.com/typesanitizer/happygo/common/assert"
 	"github.com/typesanitizer/happygo/common/cmdx"
 	. "github.com/typesanitizer/happygo/common/core"
 	"github.com/typesanitizer/happygo/common/errorx"
+	"github.com/typesanitizer/happygo/common/fsx"
 	"github.com/typesanitizer/happygo/common/logx"
 )
 
@@ -25,17 +25,17 @@ type remoteRef struct {
 func (ws Workspace) runSyncBranch(ctx logx.LogCtx, projects []string, options RunSyncBranchOptions) (err error) {
 	assert.Precondition(len(projects) > 0, "must sync 1+ projects")
 	baseBranch := options.Base.ValueOr("main")
-	fetchBaseCmd := cmdx.New("git", "fetch", "origin", baseBranch).In(ws.RepoRoot)
+	fetchBaseCmd := cmdx.New("git", "fetch", "origin", baseBranch).In(ws.FS.Root())
 	if _, err := fetchBaseCmd.Run(ctx, cmdx.RunOptionsDefault()); err != nil {
 		return err
 	}
-	worktreeDir, cleanup, err := createSyncWorktree(ctx, ws.RepoRoot, baseBranch)
+	worktreeDir, cleanup, err := createSyncWorktree(ctx, ws.FS, baseBranch)
 	if err != nil {
 		return err
 	}
 	defer func() {
 		if options.Persist {
-			ctx.Info("persisting sync worktree", "worktree", worktreeDir.String())
+			ctx.Info("persisting sync worktree", "worktree", ws.FS.Root().Join(worktreeDir).String())
 			return
 		}
 		err = errorx.Join(err, cleanup())
@@ -53,25 +53,26 @@ func (ws Workspace) runSyncBranch(ctx logx.LogCtx, projects []string, options Ru
 }
 
 func runSyncBranchProject(
-	ctx logx.LogCtx, ws Workspace, project string, worktreeDir AbsPath, baseBranch string, push bool,
+	ctx logx.LogCtx, ws Workspace, project string, worktreeDir RelPath, baseBranch string, push bool,
 ) error {
+	worktreeAbs := ws.FS.Root().Join(worktreeDir)
 	syncBranch := syncBranchPrefix + project
 	ctx.Info(
 		"syncing",
 		"project", project, "branch", syncBranch,
-		"worktree", worktreeDir.String(), "base", baseBranch,
+		"worktree", worktreeAbs.String(), "base", baseBranch,
 	)
-	if err := resetWorktreeToBase(ctx, worktreeDir, baseBranch); err != nil {
+	if err := resetWorktreeToBase(ctx, worktreeAbs, baseBranch); err != nil {
 		return errorx.Wrapf("nostack", err, "reset worktree to base %q", baseBranch)
 	}
-	if err := deleteLocalBranchIfPresent(ctx, worktreeDir, syncBranch); err != nil {
+	if err := deleteLocalBranchIfPresent(ctx, worktreeAbs, syncBranch); err != nil {
 		return errorx.Wrapf("nostack", err, "delete local branch %q", syncBranch)
 	}
-	checkoutCmd := cmdx.New("git", "checkout", "-B", syncBranch).In(worktreeDir)
+	checkoutCmd := cmdx.New("git", "checkout", "-B", syncBranch).In(worktreeAbs)
 	if _, err := checkoutCmd.Run(ctx, cmdx.RunOptionsDefault()); err != nil {
 		return err
 	}
-	if err := ws.runUpdate(ctx, worktreeDir, baseBranch, []string{project}); err != nil {
+	if err := ws.runUpdate(ctx, worktreeAbs, baseBranch, []string{project}); err != nil {
 		return err
 	}
 	if !push {
@@ -79,7 +80,7 @@ func runSyncBranchProject(
 		return nil
 	}
 
-	remoteHead, err := findRemoteBranchHeadRef(ctx, worktreeDir, syncBranch)
+	remoteHead, err := findRemoteBranchHeadRef(ctx, worktreeAbs, syncBranch)
 	if err != nil {
 		return errorx.Wrapf("nostack", err, "find remote head ref for %q", syncBranch)
 	}
@@ -87,7 +88,7 @@ func runSyncBranchProject(
 	ctx.Info("pushing sync branch", "project", project, "branch", syncBranch)
 	// See SYNC(id: gha-permissions).
 	pushCmd := cmdx.New("git", "push", forceWithLeaseArg, "origin", syncBranch+":"+syncBranch).
-		In(worktreeDir)
+		In(worktreeAbs)
 	if _, err := pushCmd.Run(ctx, cmdx.RunOptionsDefault()); err != nil {
 		return err
 	}
@@ -165,15 +166,15 @@ func formatLease(branch string, remoteHead Option[remoteRef]) string {
 }
 
 func createSyncWorktree(
-	ctx logx.LogCtx, repoRoot AbsPath, base string,
-) (AbsPath, func() error, error) {
-	tmpRoot := repoRoot.JoinComponents(".cache", "tmp")
-	if err := tmpRoot.MkdirAll(0o755); err != nil {
-		return AbsPath{}, nil, errorx.Wrapf("+stacks", err, "create temp root %q", tmpRoot)
+	ctx logx.LogCtx, repoFS fsx.FS, base string,
+) (RelPath, func() error, error) {
+	tmpRoot := NewRelPath(".cache").JoinComponents("tmp")
+	if err := repoFS.MkdirAll(tmpRoot, 0o755); err != nil {
+		return RelPath{}, nil, errorx.Wrapf("+stacks", err, "create temp root %s", tmpRoot)
 	}
-	worktreeDir, err := tmpRoot.MkdirTemp("meta-sync-")
+	worktreeDir, err := repoFS.MkdirTemp(tmpRoot, "meta-sync-")
 	if err != nil {
-		return AbsPath{}, nil, errorx.Wrapf("+stacks", err, "create sync worktree")
+		return RelPath{}, nil, errorx.Wrapf("+stacks", err, "create sync worktree")
 	}
 
 	worktreeAdded := false
@@ -181,29 +182,30 @@ func createSyncWorktree(
 		var cleanupErr error
 		if worktreeAdded {
 			removeCmd := cmdx.New("git", "worktree", "remove", "--force", worktreeDir.String()).
-				In(repoRoot)
+				In(repoFS.Root())
 			if _, removeErr := removeCmd.Run(ctx, cmdx.RunOptionsDefault()); removeErr != nil {
 				cleanupErr = errorx.Join(cleanupErr, removeErr)
 			}
 		}
-		if removeErr := os.RemoveAll(worktreeDir.String()); removeErr != nil {
+		if removeErr := repoFS.RemoveAll(worktreeDir); removeErr != nil {
 			cleanupErr = errorx.Join(cleanupErr,
-				errorx.Wrapf("+stacks", removeErr, "remove %q", worktreeDir.String()))
+				errorx.Wrapf("+stacks", removeErr, "remove %s", worktreeDir))
 		}
 		return cleanupErr
 	}
 
 	ctx.Info("adding detached sync worktree", "base", base, "worktree", worktreeDir.String())
 	addCmd := cmdx.New("git", "worktree", "add", "--quiet", "--detach", worktreeDir.String(), "origin/"+base).
-		In(repoRoot)
+		In(repoFS.Root())
 	if _, err := addCmd.Run(ctx, cmdx.RunOptionsDefault()); err != nil {
-		return AbsPath{}, nil, errorx.Join(err, cleanup())
+		return RelPath{}, nil, errorx.Join(err, cleanup())
 	}
 	worktreeAdded = true
 
-	detachCmd := cmdx.New("git", "checkout", "--detach", "origin/"+base).In(worktreeDir)
+	detachCmd := cmdx.New("git", "checkout", "--detach", "origin/"+base).
+		In(repoFS.Root().Join(worktreeDir))
 	if _, err := detachCmd.Run(ctx, cmdx.RunOptionsDefault()); err != nil {
-		return AbsPath{}, nil, errorx.Join(err, cleanup())
+		return RelPath{}, nil, errorx.Join(err, cleanup())
 	}
 	ctx.Info("worktree ready for sync", "worktree", worktreeDir.String(), "base", base)
 	return worktreeDir, cleanup, nil

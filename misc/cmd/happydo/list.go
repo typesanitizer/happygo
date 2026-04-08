@@ -10,13 +10,14 @@ import (
 
 	. "github.com/typesanitizer/happygo/common/core"
 	"github.com/typesanitizer/happygo/common/errorx"
+	"github.com/typesanitizer/happygo/common/fsx"
 	"github.com/typesanitizer/happygo/common/logx"
 	"github.com/typesanitizer/happygo/misc/internal/config"
 )
 
-func loadWorkspaceConfig(repoRoot AbsPath) (_ config.WorkspaceConfig, retErr error) {
-	path := repoRoot.JoinComponents("misc", "repo-configuration.json").String()
-	f, err := os.Open(path)
+func loadWorkspaceConfig(repoFS fsx.FS) (_ config.WorkspaceConfig, retErr error) {
+	path := NewRelPath("misc/repo-configuration.json")
+	f, err := repoFS.Open(path)
 	if err != nil {
 		return config.WorkspaceConfig{}, errorx.Wrapf("+stacks", err, "open %s", path)
 	}
@@ -48,8 +49,8 @@ const (
 
 // Workspace provides operations over the repository root using the repo configuration.
 type Workspace struct {
-	RepoRoot AbsPath
-	Config   config.WorkspaceConfig
+	FS     fsx.FS
+	Config config.WorkspaceConfig
 }
 
 func newWorkspaceFromGit() (Workspace, error) {
@@ -58,8 +59,12 @@ func newWorkspaceFromGit() (Workspace, error) {
 		return Workspace{}, errorx.Wrapf("nostack", err, "determine git repository root")
 	}
 	repoRoot := NewAbsPath(strings.TrimSpace(string(out)))
-	wsConfig, err := loadWorkspaceConfig(repoRoot)
-	return Workspace{RepoRoot: repoRoot, Config: wsConfig}, err
+	repoFS, err := fsx.OS(repoRoot)
+	if err != nil {
+		return Workspace{}, errorx.Wrapf("+stacks", err, "open repo filesystem at %s", repoRoot)
+	}
+	wsConfig, err := loadWorkspaceConfig(repoFS)
+	return Workspace{FS: repoFS, Config: wsConfig}, err
 }
 
 type ListOptions struct {
@@ -91,18 +96,19 @@ func (w Workspace) listGoModules(logger *logx.Logger, out io.Writer, provenance 
 }
 
 func (w Workspace) goModules(logger *logx.Logger, provenance ListProvenance) ([]string, error) {
-	entries, err := os.ReadDir(w.RepoRoot.String())
-	if err != nil {
-		return nil, errorx.Wrapf("+stacks", err, "read directory %s", w.RepoRoot.String())
-	}
-
+	rootRel := NewRelPath(".")
 	var folders []string
-	for _, entry := range entries {
+	for entryRes := range w.FS.ReadDir(rootRel) {
+		entry, err := entryRes.Get()
+		if err != nil {
+			return nil, errorx.Wrapf("+stacks", err, "read directory %s", w.FS.Root())
+		}
 		if !entry.IsDir() {
 			continue
 		}
-		name := entry.Name()
-		if _, err := os.Stat(w.RepoRoot.JoinComponents(name, "go.mod").String()); err != nil {
+		name := entry.BaseName()
+		goModRel := rootRel.JoinComponents(name, "go.mod")
+		if _, err := w.FS.Stat(goModRel); err != nil {
 			if !os.IsNotExist(err) {
 				logger.Warn("stat go.mod", "dir", name, "err", err)
 			}
