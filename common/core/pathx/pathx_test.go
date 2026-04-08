@@ -10,6 +10,7 @@ import (
 
 	"github.com/typesanitizer/happygo/common/assert"
 	"github.com/typesanitizer/happygo/common/check"
+	. "github.com/typesanitizer/happygo/common/check/prelude"
 	"github.com/typesanitizer/happygo/common/core/pathx"
 	"github.com/typesanitizer/happygo/common/core/pathx/pathx_testkit"
 )
@@ -180,8 +181,7 @@ func TestRootRelPathBasics(t *testing.T) {
 
 func TestResolveAbsPath(t *testing.T) {
 	h := check.New(t)
-	_, err := pathx.ResolveAbsPath(".")
-	h.NoErrorf(err, "ResolveAbsPath(.)")
+	_ = Do(pathx.ResolveAbsPath("."))(h)
 }
 
 func TestRejectsEmptyPaths(t *testing.T) {
