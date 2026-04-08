@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/typesanitizer/happygo/common/check"
+	. "github.com/typesanitizer/happygo/common/check/prelude"
 )
 
 func validConfig() WorkspaceConfigJSON {
@@ -162,8 +163,7 @@ func TestValidateSuccess(t *testing.T) {
 	h.Parallel()
 
 	cfg := validConfig()
-	rc, err := cfg.Validate()
-	h.NoErrorf(err, "validate config")
+	rc := Do(cfg.Validate())(h)
 	h.Assertf(len(rc.ForkedFolders) == 2, "expected 2 forked folders, got %d", len(rc.ForkedFolders))
 	h.Assertf(len(rc.BranchMappings.ByLocalBranch) == 1, "expected 1 branch mapping, got %d", len(rc.BranchMappings.ByLocalBranch))
 }

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/typesanitizer/happygo/common/check"
+	. "github.com/typesanitizer/happygo/common/check/prelude"
 	. "github.com/typesanitizer/happygo/common/core"
 )
 
@@ -65,7 +66,7 @@ func TestParseSingleRemoteRef(t *testing.T) {
 					"got error %q, want substring %q", err.Error(), tt.wantErr)
 				return
 			}
-			h.NoErrorf(err, "parseSingleRemoteRef")
+			got = Do(got, err)(h)
 			h.Assertf(got == tt.want, "got %#v, want %#v", got, tt.want)
 		})
 	}

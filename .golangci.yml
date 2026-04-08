@@ -21,10 +21,10 @@ linters:
     - unused
   exclusions:
     rules:
-      # common/core is designed for dot-import usage.
+      # common/core and common/check/prelude are designed for dot-import usage.
       - linters: [staticcheck]
         text: "ST1001"
-        source: 'common/core'
+        source: 'common/core|common/check/prelude'
       - linters: [forbidigo]
         path: ^common/core/pathx/pathx.go$
         source: 'os\.(MkdirAll|MkdirTemp)'
@@ -54,7 +54,7 @@ linters:
     importas:
       no-unaliased: true
       alias:
-        - pkg: github.com/typesanitizer/happygo/common/core
+        - pkg: github.com/typesanitizer/happygo/common/(core|check/prelude)
           alias: .
     exhaustruct:
       # NOTE: Even with allow-empty-returns: false, exhaustruct unconditionally

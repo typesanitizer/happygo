@@ -12,6 +12,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/typesanitizer/happygo/common/check"
+	. "github.com/typesanitizer/happygo/common/check/prelude"
 	"github.com/typesanitizer/happygo/common/collections"
 	"github.com/typesanitizer/happygo/common/iterx"
 	"github.com/typesanitizer/happygo/misc/internal/config"
@@ -21,17 +22,15 @@ func TestWorkspaceConfig(t *testing.T) {
 	h := check.New(t)
 	h.Parallel()
 
-	f, err := os.Open("repo-configuration.json")
-	h.NoErrorf(err, "opening repo-configuration.json")
+	f := DoMsg(os.Open("repo-configuration.json"))(h, "opening repo-configuration.json")
 	t.Cleanup(func() { _ = f.Close() })
 
-	wsConfig, err := config.Load(f)
-	h.NoErrorf(err, "loading repo configuration")
+	wsConfig := Do(config.Load(f))(h)
 
 	configFolders := collections.SortedMapKeys(wsConfig.ForkedFolders)
 
-	repoRootBytes, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
-	h.NoErrorf(err, "resolving repo root")
+	repoRootBytes := DoMsg(exec.Command("git", "rev-parse", "--show-toplevel").Output())(h,
+		"resolving repo root")
 	repoRoot := strings.TrimSpace(string(repoRootBytes))
 
 	forkedProjects := map[string]config.GitHubRepo{
@@ -62,8 +61,8 @@ func TestWorkspaceConfig(t *testing.T) {
 	h.Run("WorkflowProjectChoices", func(h check.Harness) {
 		h.Parallel()
 
-		workflowBytes, err := os.ReadFile(filepath.Join(repoRoot, ".github/workflows/upstream-sync.yml"))
-		h.NoErrorf(err, "reading upstream-sync.yml")
+		workflowBytes := DoMsg(os.ReadFile(filepath.Join(repoRoot, ".github/workflows/upstream-sync.yml")))(h,
+			"reading upstream-sync.yml")
 
 		var workflow struct {
 			On struct {
@@ -90,8 +89,8 @@ func TestWorkspaceConfig(t *testing.T) {
 	h.Run("LinterExclusions", func(h check.Harness) {
 		h.Parallel()
 
-		lintBytes, err := os.ReadFile(filepath.Join(repoRoot, ".golangci.yml"))
-		h.NoErrorf(err, "reading .golangci.yml")
+		lintBytes := DoMsg(os.ReadFile(filepath.Join(repoRoot, ".golangci.yml")))(h,
+			"reading .golangci.yml")
 
 		var lintCfg struct {
 			Linters struct {
