@@ -97,6 +97,22 @@ func (p AbsPath) Join(rel RelPath) AbsPath {
 	return NewAbsPath(filepath.Join(p.value, rel.value))
 }
 
+// AppendExtension returns p with ext appended.
+//
+// Pre-conditions:
+// 1. p must be non-empty.
+// 2. p does not end with a path separator (i.e. p must be a valid file path).
+func (p AbsPath) AppendExtension(ext string) AbsPath {
+	if len(p.value) == 0 {
+		assert.Precondition(false, "empty path")
+	} else {
+		lastCharStr := p.value[len(p.value)-1:]
+		assert.Preconditionf(!HasPathSeparators(lastCharStr),
+			"path %q ends with a path separator; so it's not a valid file path", p.value)
+	}
+	return NewAbsPath(p.value + ext)
+}
+
 // JoinComponents joins individual path components onto p.
 //
 // Pre-condition: no element contains a path separator.
