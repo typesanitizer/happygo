@@ -8,8 +8,9 @@ import (
 	"github.com/typesanitizer/happygo/common/check"
 	. "github.com/typesanitizer/happygo/common/check/prelude"
 	. "github.com/typesanitizer/happygo/common/core"
-	"github.com/typesanitizer/happygo/common/fsx"
+	"github.com/typesanitizer/happygo/common/envx"
 	"github.com/typesanitizer/happygo/common/logx"
+	"github.com/typesanitizer/happygo/common/syscaps"
 	"github.com/typesanitizer/happygo/misc/internal/config"
 )
 
@@ -26,10 +27,11 @@ func TestList(t *testing.T) {
 		"file.txt":     "not a dir\n",
 	})
 
-	repoFS := Do(fsx.OS(NewAbsPath(root)))(h)
+	repoFS := Do(syscaps.FS(NewAbsPath(root)))(h)
 
 	ws := Workspace{
-		FS: repoFS,
+		FS:     repoFS,
+		Runner: syscaps.CmdRunner{Env: envx.Empty()},
 		Config: config.WorkspaceConfig{
 			ForkedFolders: map[string]config.ForkedFolder{
 				"beta": {Folder: "beta", GitHubRepo: "example/beta"},

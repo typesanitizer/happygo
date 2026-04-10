@@ -4,9 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"sort"
-	"strings"
 
 	. "github.com/typesanitizer/happygo/common/core"
 	"github.com/typesanitizer/happygo/common/errorx"
@@ -46,26 +44,6 @@ const (
 	ListProvenance_FirstParty
 	ListProvenance_Forked
 )
-
-// Workspace provides operations over the repository root using the repo configuration.
-type Workspace struct {
-	FS     fsx.FS
-	Config config.WorkspaceConfig
-}
-
-func newWorkspaceFromGit() (Workspace, error) {
-	out, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
-	if err != nil {
-		return Workspace{}, errorx.Wrapf("nostack", err, "determine git repository root")
-	}
-	repoRoot := NewAbsPath(strings.TrimSpace(string(out)))
-	repoFS, err := fsx.OS(repoRoot)
-	if err != nil {
-		return Workspace{}, errorx.Wrapf("+stacks", err, "open repo filesystem at %s", repoRoot)
-	}
-	wsConfig, err := loadWorkspaceConfig(repoFS)
-	return Workspace{FS: repoFS, Config: wsConfig}, err
-}
 
 type ListOptions struct {
 	Type       ListType

@@ -3,7 +3,6 @@ package misc_test
 import (
 	"maps"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -14,6 +13,7 @@ import (
 	"github.com/typesanitizer/happygo/common/check"
 	. "github.com/typesanitizer/happygo/common/check/prelude"
 	"github.com/typesanitizer/happygo/common/collections"
+	"github.com/typesanitizer/happygo/common/core/pathx"
 	"github.com/typesanitizer/happygo/common/iterx"
 	"github.com/typesanitizer/happygo/misc/internal/config"
 )
@@ -29,9 +29,7 @@ func TestWorkspaceConfig(t *testing.T) {
 
 	configFolders := collections.SortedMapKeys(wsConfig.ForkedFolders)
 
-	repoRootBytes := DoMsg(exec.Command("git", "rev-parse", "--show-toplevel").Output())(h,
-		"resolving repo root")
-	repoRoot := strings.TrimSpace(string(repoRootBytes))
+	repoRoot := DoMsg(pathx.ResolveAbsPath(".."))(h, "resolving repo root").String()
 
 	forkedProjects := map[string]config.GitHubRepo{
 		"go":    "golang/go",

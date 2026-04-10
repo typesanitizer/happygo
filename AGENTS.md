@@ -2,7 +2,7 @@
 
 ## Code Style
 
-Follow `doc/style-guides/go.md` for Go code conventions (import ordering, etc.).
+Follow `docs/style-guides/go.md` for Go code conventions (import ordering, etc.).
 
 ## Commit Hygiene for PRs
 

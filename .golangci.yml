@@ -53,6 +53,24 @@ linters:
               desc: "use common/logx instead of charmbracelet/log directly"
             - pkg: "github.com/spf13/afero"
               desc: "use common/fsx instead of spf13/afero directly"
+        NoDirectOsExec:
+          files:
+            - $all
+            - "!**/common/syscaps/*.go"
+            - "!**/common/envx/envx_path/*.go"
+          list-mode: lax
+          deny:
+            - pkg: "os/exec$"
+              desc: "use cmdx abstractions instead of os/exec directly; only common/syscaps and common/envx/envx_path are allowed to import it"
+        NoDirectSyscaps:
+          files:
+            - $all
+            - "!**/main.go"
+            - "!$test"
+          list-mode: lax
+          deny:
+            - pkg: "github.com/typesanitizer/happygo/common/syscaps$"
+              desc: "ambient system capabilities should only be accessed via common/syscaps at program edges or in tests"
     importas:
       no-unaliased: true
       alias:

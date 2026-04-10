@@ -18,10 +18,9 @@ import (
 	. "github.com/typesanitizer/happygo/common/core"
 	"github.com/typesanitizer/happygo/common/core/pathx"
 	"github.com/typesanitizer/happygo/common/errorx"
+	"github.com/typesanitizer/happygo/common/internal/constants"
 	"github.com/typesanitizer/happygo/common/iterx"
 )
-
-const readDirBatchSize = 32
 
 // File is an open file handle returned by [FS.Open] and similar methods.
 // It is an alias for [afero.File] so callers need not import afero directly.
@@ -60,21 +59,19 @@ type FS struct {
 	base afero.Fs
 }
 
-// OS returns an FS backed by the host operating system rooted at root.
-func OS(root AbsPath) (FS, error) {
-	return newRootedFS(root, afero.NewOsFs())
-}
-
 // MemMap returns an in-memory FS rooted at root.
 func MemMap(root AbsPath) (FS, error) {
 	backing := afero.NewMemMapFs()
 	if err := backing.MkdirAll(root.String(), 0o755); err != nil {
 		return FS{}, errorx.Wrapf("+stacks", err, "create fs root %s", root)
 	}
-	return newRootedFS(root, backing)
+	return NewRootedFS(root, backing)
 }
 
-func newRootedFS(root AbsPath, backing afero.Fs) (FS, error) {
+// NewRootedFS returns an FS rooted at root and backed by backing.
+//
+// Pre-condition: root must already exist in backing and be a directory.
+func NewRootedFS(root AbsPath, backing afero.Fs) (FS, error) {
 	info, err := backing.Stat(root.String())
 	if err != nil {
 		return FS{}, errorx.Wrapf("+stacks", err, "stat fs root %s", root)
@@ -125,7 +122,7 @@ func (fs FS) readDirBatches(rel RelPath) iter.Seq[Result[[]iofs.DirEntry]] {
 		assert.Invariantf(ok, "open(%q) returned %T, want fs.ReadDirFile", rel, f)
 
 		for {
-			entries, err := rdf.ReadDir(readDirBatchSize)
+			entries, err := rdf.ReadDir(constants.ReadDirBatchSize)
 			if len(entries) > 0 {
 				if !yield(Success(entries)) {
 					return

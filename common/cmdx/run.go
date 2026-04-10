@@ -1,22 +1,17 @@
 package cmdx
 
 import (
-	"bytes"
-	"io"
-	"os"
-	"os/exec"
-
-	"github.com/typesanitizer/happygo/common/errorx"
+	"github.com/typesanitizer/happygo/common/envx"
 	"github.com/typesanitizer/happygo/common/logx"
 )
 
-// RunOptions configures Cmd.Run behavior.
+// RunOptions configures BaseRunner.Run behavior.
 type RunOptions struct {
 	CaptureStdout bool
-	TransformEnv  func([]string) []string
+	TransformEnv  func(envx.Env) envx.Env
 }
 
-// RunOptionsDefault returns default options for Cmd.Run.
+// RunOptionsDefault returns default options for BaseRunner.Run.
 func RunOptionsDefault() RunOptions {
 	return RunOptions{CaptureStdout: false, TransformEnv: nil}
 }
@@ -27,44 +22,30 @@ func (o RunOptions) WithCaptureStdout() RunOptions {
 	return o
 }
 
-func (cmd Cmd) Run(ctx logx.LogCtx, options RunOptions) (string, error) {
-	dir, hasDir := cmd.dir.Get()
-	if hasDir {
-		ctx.Debug("running command", "cmd", cmd, "dir", dir.String())
-	} else {
-		ctx.Debug("running command", "cmd", cmd)
-	}
-
-	stdout, stderr := ctx.CmdLoggers(cmd)
-	defer logx.FlushLogWriter(stdout)
-	defer logx.FlushLogWriter(stderr)
-
-	execCmd := exec.CommandContext(ctx, cmd.name, cmd.args...)
-	if hasDir {
-		execCmd.Dir = dir.String()
-	}
-	if options.TransformEnv != nil {
-		execCmd.Env = options.TransformEnv(os.Environ())
-	}
-
-	var capturedOutput bytes.Buffer
-	if options.CaptureStdout {
-		execCmd.Stdout = io.MultiWriter(stdout, &capturedOutput)
-	} else {
-		execCmd.Stdout = stdout
-	}
-	execCmd.Stderr = stderr
-
-	if err := execCmd.Run(); err != nil {
-		return capturedOutput.String(), errorx.Wrapf("+stacks", err, "%s", cmd)
-	}
-	return capturedOutput.String(), nil
+// BaseRunner executes a single command.
+//
+// Run is intended for non-streaming use cases. If we later need streaming
+// capture, we can add a lower-level API and implement Run on top of it.
+type BaseRunner interface {
+	// Run runs a command.
+	//
+	// The first return value is the captured stdout. There may be stdout
+	// even in the presence of errors. Stdout is only captured if
+	// options.CaptureStdout is true.
+	Run(_ logx.LogCtx, _ Cmd, options RunOptions) (string, error)
 }
 
-// ExecAll runs each command sequentially with default options, stopping at the first error.
-func ExecAll(ctx logx.LogCtx, cmds ...Cmd) error {
+// Runner executes single commands and sequential command lists.
+type Runner interface {
+	BaseRunner
+	// ExecAll runs cmds sequentially with default options, stopping at
+	// the first error.
+	ExecAll(_ logx.LogCtx, cmds ...Cmd) error
+}
+
+func BaseRunnerExecAll(runner BaseRunner, ctx logx.LogCtx, cmds ...Cmd) error {
 	for _, cmd := range cmds {
-		if _, err := cmd.Run(ctx, RunOptionsDefault()); err != nil {
+		if _, err := runner.Run(ctx, cmd, RunOptionsDefault()); err != nil {
 			return err
 		}
 	}
