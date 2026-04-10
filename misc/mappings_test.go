@@ -103,7 +103,7 @@ func TestWorkspaceConfig(t *testing.T) {
 
 		configSet := collections.NewSet[string]()
 		for _, f := range configFolders {
-			configSet.Insert(f)
+			configSet.InsertNew(f)
 		}
 
 		excludedSet := collections.NewSet[string]()
@@ -112,7 +112,7 @@ func TestWorkspaceConfig(t *testing.T) {
 			h.Assertf(ok, "linter exclusion path %q must start with ^", p)
 			folder, ok = strings.CutSuffix(folder, "/")
 			h.Assertf(ok, "linter exclusion path %q must end with /", p)
-			excludedSet.Insert(folder)
+			excludedSet.InsertNew(folder)
 		}
 
 		h.Assertf(excludedSet.IsSubsetOf(&configSet),

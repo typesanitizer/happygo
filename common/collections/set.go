@@ -4,6 +4,9 @@ import (
 	"cmp"
 	"iter"
 	"sort"
+
+	"github.com/typesanitizer/happygo/common/assert"
+	"github.com/typesanitizer/happygo/common/core/op"
 )
 
 // Set is a basic mutable set.
@@ -17,11 +20,21 @@ func NewSet[T comparable]() Set[T] {
 }
 
 // Insert adds value to the set.
-// It returns true if a value was inserted.
-func (s *Set[T]) Insert(value T) bool {
-	before := len(s.values)
+func (s *Set[T]) Insert(value T) op.InsertResult {
+	if _, ok := s.values[value]; ok {
+		return op.KeptOld
+	}
 	s.values[value] = struct{}{}
-	return len(s.values) != before
+	return op.InsertedNew
+}
+
+// InsertNew adds value to the set.
+//
+// Pre-condition: value is not already present.
+func (s *Set[T]) InsertNew(value T) {
+	_, ok := s.values[value]
+	assert.Preconditionf(!ok, "set already contains value %v", value)
+	s.values[value] = struct{}{}
 }
 
 // Contains reports whether value is in the set.
