@@ -22,14 +22,16 @@ type remoteRef struct {
 	SHA  string
 }
 
-func (ws Workspace) runSyncBranch(ctx logx.LogCtx, projects []string, options RunSyncBranchOptions) (err error) {
+func (ws Workspace) runSyncBranch(
+	ctx logx.LogCtx, projects []string, options RunSyncBranchOptions,
+) (err error) {
 	assert.Precondition(len(projects) > 0, "must sync 1+ projects")
 	baseBranch := options.Base.ValueOr("main")
 	fetchBaseCmd := cmdx.New("git", "fetch", "origin", baseBranch).In(ws.FS.Root())
-	if _, err := fetchBaseCmd.Run(ctx, cmdx.RunOptionsDefault()); err != nil {
+	if _, err := ws.Runner.Run(ctx, fetchBaseCmd, cmdx.RunOptionsDefault()); err != nil {
 		return err
 	}
-	worktreeDir, cleanup, err := createSyncWorktree(ctx, ws.FS, baseBranch)
+	worktreeDir, cleanup, err := createSyncWorktree(ctx, ws.Runner, ws.FS, baseBranch)
 	if err != nil {
 		return err
 	}
@@ -53,7 +55,8 @@ func (ws Workspace) runSyncBranch(ctx logx.LogCtx, projects []string, options Ru
 }
 
 func runSyncBranchProject(
-	ctx logx.LogCtx, ws Workspace, project string, worktreeDir RelPath, baseBranch string, push bool,
+	ctx logx.LogCtx, ws Workspace,
+	project string, worktreeDir RelPath, baseBranch string, push bool,
 ) error {
 	worktreeAbs := ws.FS.Root().Join(worktreeDir)
 	syncBranch := syncBranchPrefix + project
@@ -62,14 +65,14 @@ func runSyncBranchProject(
 		"project", project, "branch", syncBranch,
 		"worktree", worktreeAbs.String(), "base", baseBranch,
 	)
-	if err := resetWorktreeToBase(ctx, worktreeAbs, baseBranch); err != nil {
+	if err := resetWorktreeToBase(ctx, ws.Runner, worktreeAbs, baseBranch); err != nil {
 		return errorx.Wrapf("nostack", err, "reset worktree to base %q", baseBranch)
 	}
-	if err := deleteLocalBranchIfPresent(ctx, worktreeAbs, syncBranch); err != nil {
+	if err := deleteLocalBranchIfPresent(ctx, ws.Runner, worktreeAbs, syncBranch); err != nil {
 		return errorx.Wrapf("nostack", err, "delete local branch %q", syncBranch)
 	}
 	checkoutCmd := cmdx.New("git", "checkout", "-B", syncBranch).In(worktreeAbs)
-	if _, err := checkoutCmd.Run(ctx, cmdx.RunOptionsDefault()); err != nil {
+	if _, err := ws.Runner.Run(ctx, checkoutCmd, cmdx.RunOptionsDefault()); err != nil {
 		return err
 	}
 	if err := ws.runUpdate(ctx, worktreeAbs, baseBranch, []string{project}); err != nil {
@@ -80,7 +83,7 @@ func runSyncBranchProject(
 		return nil
 	}
 
-	remoteHead, err := findRemoteBranchHeadRef(ctx, worktreeAbs, syncBranch)
+	remoteHead, err := findRemoteBranchHeadRef(ctx, ws.Runner, worktreeAbs, syncBranch)
 	if err != nil {
 		return errorx.Wrapf("nostack", err, "find remote head ref for %q", syncBranch)
 	}
@@ -89,23 +92,25 @@ func runSyncBranchProject(
 	// See SYNC(id: gha-permissions).
 	pushCmd := cmdx.New("git", "push", forceWithLeaseArg, "origin", syncBranch+":"+syncBranch).
 		In(worktreeAbs)
-	if _, err := pushCmd.Run(ctx, cmdx.RunOptionsDefault()); err != nil {
+	if _, err := ws.Runner.Run(ctx, pushCmd, cmdx.RunOptionsDefault()); err != nil {
 		return err
 	}
 	return nil
 }
 
-func resetWorktreeToBase(ctx logx.LogCtx, worktreeDir AbsPath, base string) error {
-	return cmdx.ExecAll(ctx,
+func resetWorktreeToBase(ctx logx.LogCtx, runner cmdx.Runner, worktreeDir AbsPath, base string) error {
+	return runner.ExecAll(ctx,
 		cmdx.New("git", "checkout", "--detach", "origin/"+base).In(worktreeDir),
 		cmdx.New("git", "reset", "--hard", "origin/"+base).In(worktreeDir),
 		cmdx.New("git", "clean", "-fd").In(worktreeDir),
 	)
 }
 
-func deleteLocalBranchIfPresent(ctx logx.LogCtx, worktreeDir AbsPath, branch string) error {
+func deleteLocalBranchIfPresent(
+	ctx logx.LogCtx, runner cmdx.BaseRunner, worktreeDir AbsPath, branch string,
+) error {
 	listCmd := cmdx.New("git", "branch", "--list", branch).In(worktreeDir)
-	out, err := listCmd.Run(ctx, cmdx.RunOptionsDefault().WithCaptureStdout())
+	out, err := runner.Run(ctx, listCmd, cmdx.RunOptionsDefault().WithCaptureStdout())
 	if err != nil {
 		return err
 	}
@@ -113,18 +118,18 @@ func deleteLocalBranchIfPresent(ctx logx.LogCtx, worktreeDir AbsPath, branch str
 		return nil
 	}
 	deleteCmd := cmdx.New("git", "branch", "-D", branch).In(worktreeDir)
-	_, err = deleteCmd.Run(ctx, cmdx.RunOptionsDefault())
+	_, err = runner.Run(ctx, deleteCmd, cmdx.RunOptionsDefault())
 	return err
 }
 
 func findRemoteBranchHeadRef(
-	ctx logx.LogCtx, worktreeDir AbsPath, branch string,
+	ctx logx.LogCtx, runner cmdx.BaseRunner, worktreeDir AbsPath, branch string,
 ) (Option[remoteRef], error) {
 	assert.Precondition(branch != "", "branch must be non-empty")
 
 	branchRef := "refs/heads/" + branch
 	lsRemoteCmd := cmdx.New("git", "ls-remote", "--heads", "origin", branchRef).In(worktreeDir)
-	out, err := lsRemoteCmd.Run(ctx, cmdx.RunOptionsDefault().WithCaptureStdout())
+	out, err := runner.Run(ctx, lsRemoteCmd, cmdx.RunOptionsDefault().WithCaptureStdout())
 	if err != nil {
 		return None[remoteRef](), err
 	}
@@ -166,7 +171,7 @@ func formatLease(branch string, remoteHead Option[remoteRef]) string {
 }
 
 func createSyncWorktree(
-	ctx logx.LogCtx, repoFS fsx.FS, base string,
+	ctx logx.LogCtx, runner cmdx.BaseRunner, repoFS fsx.FS, base string,
 ) (RelPath, func() error, error) {
 	tmpRoot := NewRelPath(".cache").JoinComponents("tmp")
 	if err := repoFS.MkdirAll(tmpRoot, 0o755); err != nil {
@@ -183,7 +188,7 @@ func createSyncWorktree(
 		if worktreeAdded {
 			removeCmd := cmdx.New("git", "worktree", "remove", "--force", worktreeDir.String()).
 				In(repoFS.Root())
-			if _, removeErr := removeCmd.Run(ctx, cmdx.RunOptionsDefault()); removeErr != nil {
+			if _, removeErr := runner.Run(ctx, removeCmd, cmdx.RunOptionsDefault()); removeErr != nil {
 				cleanupErr = errorx.Join(cleanupErr, removeErr)
 			}
 		}
@@ -197,14 +202,14 @@ func createSyncWorktree(
 	ctx.Info("adding detached sync worktree", "base", base, "worktree", worktreeDir.String())
 	addCmd := cmdx.New("git", "worktree", "add", "--quiet", "--detach", worktreeDir.String(), "origin/"+base).
 		In(repoFS.Root())
-	if _, err := addCmd.Run(ctx, cmdx.RunOptionsDefault()); err != nil {
+	if _, err := runner.Run(ctx, addCmd, cmdx.RunOptionsDefault()); err != nil {
 		return RelPath{}, nil, errorx.Join(err, cleanup())
 	}
 	worktreeAdded = true
 
 	detachCmd := cmdx.New("git", "checkout", "--detach", "origin/"+base).
 		In(repoFS.Root().Join(worktreeDir))
-	if _, err := detachCmd.Run(ctx, cmdx.RunOptionsDefault()); err != nil {
+	if _, err := runner.Run(ctx, detachCmd, cmdx.RunOptionsDefault()); err != nil {
 		return RelPath{}, nil, errorx.Join(err, cleanup())
 	}
 	ctx.Info("worktree ready for sync", "worktree", worktreeDir.String(), "base", base)

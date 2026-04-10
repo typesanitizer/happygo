@@ -2,23 +2,55 @@ package main
 
 import (
 	"context"
+	"io"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/typesanitizer/happygo/common/cmdx"
 	"github.com/typesanitizer/happygo/common/collections"
 	. "github.com/typesanitizer/happygo/common/core"
 	"github.com/typesanitizer/happygo/common/errorx"
+	"github.com/typesanitizer/happygo/common/fsx"
 	"github.com/typesanitizer/happygo/common/logx"
+	"github.com/typesanitizer/happygo/common/syscaps"
+	"github.com/typesanitizer/happygo/misc/internal/config"
 )
 
 const syncBranchPrefix = "merge-bot/sync/"
 
+// Workspace provides operations over the repository root using the repo configuration.
+type Workspace struct {
+	FS     fsx.FS
+	Config config.WorkspaceConfig
+	Runner cmdx.Runner
+}
+
+func newWorkspaceFromGit(runner cmdx.Runner) (Workspace, error) {
+	repoRootCmd := cmdx.New("git", "rev-parse", "--show-toplevel")
+	ctx := logx.NewLogCtx(context.Background(), logx.NewLogger(io.Discard, logx.ColorSupport_Disable))
+	out, err := runner.Run(ctx, repoRootCmd, cmdx.RunOptionsDefault().WithCaptureStdout())
+	if err != nil {
+		return Workspace{}, errorx.Wrapf("nostack", err, "determine git repository root")
+	}
+	repoRoot := NewAbsPath(strings.TrimSpace(out))
+	repoFS, err := syscaps.FS(repoRoot)
+	if err != nil {
+		return Workspace{}, errorx.Wrapf("+stacks", err, "open repo filesystem at %s", repoRoot)
+	}
+	wsConfig, err := loadWorkspaceConfig(repoFS)
+	return Workspace{FS: repoFS, Config: wsConfig, Runner: runner}, err
+}
+
 func main() {
 	logger := logx.NewLogger(os.Stderr, logx.ColorSupport_AutoDetect)
-	getWorkspace := sync.OnceValues(newWorkspaceFromGit)
+	runner := syscaps.CmdRunner{Env: syscaps.Env()}
+	getWorkspace := sync.OnceValues(func() (Workspace, error) {
+		return newWorkspaceFromGit(runner)
+	})
 	app := &cli.Command{
 		Name:  "meta",
 		Usage: "Perform workspace-related administrative tasks",

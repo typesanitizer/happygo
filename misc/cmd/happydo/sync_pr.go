@@ -62,49 +62,53 @@ func (ws Workspace) runSyncPR(ctx logx.LogCtx, projects []string, options RunSyn
 	assert.Precondition(len(projects) > 0, "must sync 1+ projects")
 	base := options.Base.ValueOr("main")
 	for _, project := range projects {
-		if err := runSyncPRProject(ctx, ws.FS.Root(), project, base); err != nil {
+		if err := runSyncPRProject(ctx, ws.Runner, ws.FS.Root(), project, base); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func runSyncPRProject(ctx logx.LogCtx, repoRoot AbsPath, project string, base string) error {
+func runSyncPRProject(
+	ctx logx.LogCtx,
+	runner cmdx.BaseRunner,
+	repoRoot AbsPath, project string, base string,
+) error {
 	syncBranch := syncBranchPrefix + project
 	fetchCmd := cmdx.New("git", "fetch", "origin", syncBranch).In(repoRoot)
-	if _, err := fetchCmd.Run(ctx, cmdx.RunOptionsDefault()); err != nil {
+	if _, err := runner.Run(ctx, fetchCmd, cmdx.RunOptionsDefault()); err != nil {
 		return err
 	}
 	// The push in sync-branch is a no-op when upstream hasn't changed,
 	// but sync-pr still runs unconditionally. Skip PR creation/updates
 	// when the sync branch has no diff vs base to avoid noisy re-edits.
 	diffCmd := cmdx.New("git", "diff", "--quiet", "origin/"+base+"...origin/"+syncBranch).In(repoRoot)
-	if _, err := diffCmd.Run(ctx, cmdx.RunOptionsDefault()); err == nil {
+	if _, err := runner.Run(ctx, diffCmd, cmdx.RunOptionsDefault()); err == nil {
 		ctx.Info("no diff between base and sync branch, skipping",
 			"project", project, "base", base, "branch", syncBranch)
 		return nil
 	}
-	headSHA, err := cmdx.New("git", "rev-parse", "origin/"+syncBranch).In(repoRoot).
-		Run(ctx, cmdx.RunOptionsDefault().WithCaptureStdout())
+	headSHACmd := cmdx.New("git", "rev-parse", "origin/"+syncBranch).In(repoRoot)
+	headSHA, err := runner.Run(ctx, headSHACmd, cmdx.RunOptionsDefault().WithCaptureStdout())
 	if err != nil {
 		return err
 	}
 	headSHA = strings.TrimSpace(headSHA)
-	metadata, err := subtreeMetadataForSyncHead(ctx, repoRoot, project, headSHA)
+	metadata, err := subtreeMetadataForSyncHead(ctx, runner, repoRoot, project, headSHA)
 	if err != nil {
 		return err
 	}
-	existingPR, err := findOpenPR(ctx, repoRoot, base, syncBranch)
+	existingPR, err := findOpenPR(ctx, runner, repoRoot, base, syncBranch)
 	if err != nil {
 		return err
 	}
 	projectLabel := "project/" + project
 	ensureSyncLabels := func() error {
-		if err := ensureLabelExists(ctx, repoRoot, projectLabel,
+		if err := ensureLabelExists(ctx, runner, repoRoot, projectLabel,
 			"1d76db", "Project-specific sync updates"); err != nil {
 			return err
 		}
-		if err := ensureLabelExists(ctx, repoRoot, "upstream-sync",
+		if err := ensureLabelExists(ctx, runner, repoRoot, "upstream-sync",
 			"6e7781", "Automated upstream sync updates"); err != nil {
 			return err
 		}
@@ -125,7 +129,7 @@ func runSyncPRProject(ctx logx.LogCtx, repoRoot AbsPath, project string, base st
 			"--title", title, "--body", body,
 			"--add-label", projectLabel, "--add-label", "upstream-sync",
 		).In(repoRoot)
-		if _, err := editPRCmd.Run(ctx, cmdx.RunOptionsDefault()); err != nil {
+		if _, err := runner.Run(ctx, editPRCmd, cmdx.RunOptionsDefault()); err != nil {
 			return err
 		}
 	} else {
@@ -137,10 +141,10 @@ func runSyncPRProject(ctx logx.LogCtx, repoRoot AbsPath, project string, base st
 			"--title", title, "--body", body,
 			"--label", projectLabel, "--label", "upstream-sync",
 		).In(repoRoot)
-		if _, err := createPRCmd.Run(ctx, cmdx.RunOptionsDefault()); err != nil {
+		if _, err := runner.Run(ctx, createPRCmd, cmdx.RunOptionsDefault()); err != nil {
 			return err
 		}
-		created, err := findOpenPR(ctx, repoRoot, base, syncBranch)
+		created, err := findOpenPR(ctx, runner, repoRoot, base, syncBranch)
 		if err != nil {
 			return err
 		}
@@ -159,16 +163,16 @@ func runSyncPRProject(ctx logx.LogCtx, repoRoot AbsPath, project string, base st
 		"--subject", title, "--body", mergeBody,
 		"--match-head-commit", headSHA,
 	).In(repoRoot)
-	if _, err := mergePRCmd.Run(ctx, cmdx.RunOptionsDefault()); err != nil {
+	if _, err := runner.Run(ctx, mergePRCmd, cmdx.RunOptionsDefault()); err != nil {
 		return err
 	}
 	return nil
 }
 
 func findOpenPR(
-	ctx logx.LogCtx, repoRoot AbsPath, base string, head string,
+	ctx logx.LogCtx, runner cmdx.BaseRunner, repoRoot AbsPath, base string, head string,
 ) (Option[int], error) {
-	prs, err := listOpenPRs(ctx, repoRoot, base, head)
+	prs, err := listOpenPRs(ctx, runner, repoRoot, base, head)
 	if err != nil {
 		return None[int](), err
 	}
@@ -184,14 +188,15 @@ func findOpenPR(
 }
 
 func subtreeMetadataForSyncHead(
-	ctx logx.LogCtx, repoRoot AbsPath, project string, headSHA string,
+	ctx logx.LogCtx, runner cmdx.BaseRunner,
+	repoRoot AbsPath, project string, headSHA string,
 ) (subtreeMetadata, error) {
 	assert.Precondition(project != "", "project must be non-empty")
 	assert.Precondition(headSHA != "", "headSHA must be non-empty")
 
 	var emptyMetadata subtreeMetadata
-	parentsOut, err := cmdx.New("git", "show", "--no-patch", "--format=%P", headSHA).In(repoRoot).
-		Run(ctx, cmdx.RunOptionsDefault().WithCaptureStdout())
+	parentsCmd := cmdx.New("git", "show", "--no-patch", "--format=%P", headSHA).In(repoRoot)
+	parentsOut, err := runner.Run(ctx, parentsCmd, cmdx.RunOptionsDefault().WithCaptureStdout())
 	if err != nil {
 		return emptyMetadata, err
 	}
@@ -209,14 +214,14 @@ func subtreeMetadataForSyncHead(
 }
 
 func listOpenPRs(
-	ctx logx.LogCtx, repoRoot AbsPath, base string, head string,
+	ctx logx.LogCtx, runner cmdx.BaseRunner, repoRoot AbsPath, base string, head string,
 ) ([]ListOpenPRsData, error) {
 	listPRsCmd := cmdx.New(
 		"gh", "pr", "list",
 		"--state", "open", "--base", base, "--head", head,
 		"--json", "number,url",
 	).In(repoRoot)
-	out, err := listPRsCmd.Run(ctx, cmdx.RunOptionsDefault().WithCaptureStdout())
+	out, err := runner.Run(ctx, listPRsCmd, cmdx.RunOptionsDefault().WithCaptureStdout())
 	if err != nil {
 		return nil, err
 	}
@@ -228,7 +233,8 @@ func listOpenPRs(
 }
 
 func ensureLabelExists(
-	ctx logx.LogCtx, repoRoot AbsPath, name string, color string, description string,
+	ctx logx.LogCtx, runner cmdx.BaseRunner,
+	repoRoot AbsPath, name string, color string, description string,
 ) error {
 	assert.Precondition(name != "", "name must be non-empty")
 	assert.Precondition(color != "", "color must be non-empty")
@@ -238,7 +244,7 @@ func ensureLabelExists(
 		"gh", "label", "list",
 		"--search", name, "--json", "name", "--limit", "100",
 	).In(repoRoot)
-	out, err := listLabelsCmd.Run(ctx, cmdx.RunOptionsDefault().WithCaptureStdout())
+	out, err := runner.Run(ctx, listLabelsCmd, cmdx.RunOptionsDefault().WithCaptureStdout())
 	if err != nil {
 		return err
 	}
@@ -261,7 +267,7 @@ func ensureLabelExists(
 		"gh", "label", "create", name,
 		"--color", color, "--description", description,
 	).In(repoRoot)
-	_, err = createLabelCmd.Run(ctx, cmdx.RunOptionsDefault())
+	_, err = runner.Run(ctx, createLabelCmd, cmdx.RunOptionsDefault())
 	return err
 }
 

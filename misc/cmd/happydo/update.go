@@ -19,7 +19,7 @@ func (ws Workspace) runUpdate(ctx logx.LogCtx, dir AbsPath, localBranch string, 
 		subtreePullCmd := cmdx.New(
 			"git", "subtree", "pull", "--prefix", project, upstreamURL, upstream.Branch,
 		).In(dir)
-		stdout, err := subtreePullCmd.Run(ctx, cmdx.RunOptionsDefault().WithCaptureStdout())
+		stdout, err := ws.Runner.Run(ctx, subtreePullCmd, cmdx.RunOptionsDefault().WithCaptureStdout())
 		if err != nil {
 			if stdout != "" {
 				ctx.Info("subtree pull stdout", "output", stdout)
