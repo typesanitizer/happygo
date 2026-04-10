@@ -171,6 +171,41 @@ func TestJoinMatchesJoinComponents(t *testing.T) {
 	check.AssertSame(h, want.String(), got.String(), "Join vs JoinComponents")
 }
 
+func TestAppendExtension(t *testing.T) {
+	h := check.New(t)
+
+	h.Run("AppendsExtension", func(h check.Harness) {
+		h.Parallel()
+
+		root := pathx.NewAbsPath(h.T().TempDir())
+		path := root.JoinComponents("tool")
+		got := path.AppendExtension(".exe")
+		check.AssertSame(h, root.JoinComponents("tool.exe").String(), got.String(), "AppendExtension")
+	})
+
+	h.Run("PanicsOnEmptyPath", func(h check.Harness) {
+		h.Parallel()
+
+		want := assert.AssertionError{Fmt: "precondition violation: %s", Args: []any{"empty path"}}
+		h.AssertPanicsWith(want, func() {
+			_ = (pathx.AbsPath{}).AppendExtension(".exe")
+		})
+	})
+
+	h.Run("PanicsOnTrailingSeparator", func(h check.Harness) {
+		h.Parallel()
+
+		path := pathx.NewAbsPath(h.T().TempDir() + string(filepath.Separator))
+		want := assert.AssertionError{
+			Fmt:  "precondition violation: path %q ends with a path separator; so it's not a valid file path",
+			Args: []any{path.String()},
+		}
+		h.AssertPanicsWith(want, func() {
+			_ = path.AppendExtension(".exe")
+		})
+	})
+}
+
 func TestRootRelPathBasics(t *testing.T) {
 	h := check.New(t)
 	root := pathx.NewAbsPath(t.TempDir())

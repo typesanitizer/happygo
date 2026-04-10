@@ -48,47 +48,47 @@ func TestGetRootCause(t *testing.T) {
 			{
 				name:     "sentinel",
 				input:    sentinel,
-				expected: RootCauseResult{rootCause: sentinel},
+				expected: RootCauseResult{err: sentinel, kind: linkNormal},
 			},
 			{
 				name:     "simple leaf",
 				input:    leaf1,
-				expected: RootCauseResult{rootCause: leaf1},
+				expected: RootCauseResult{err: leaf1, kind: linkNormal},
 			},
 			{
 				name:     "hitting multi error",
 				input:    fork12,
-				expected: RootCauseResult{hitMultiError: fork12},
+				expected: RootCauseResult{err: fork12, kind: linkMultiError},
 			},
 			{
 				name:     "no notion of equality checking/coalescing on hitting multi-errors",
 				input:    twoSentinels,
-				expected: RootCauseResult{hitMultiError: twoSentinels},
+				expected: RootCauseResult{err: twoSentinels, kind: linkMultiError},
 			},
 			{
 				name:     "root cause found in chain",
 				input:    chain12,
-				expected: RootCauseResult{rootCause: leaf2},
+				expected: RootCauseResult{err: leaf2, kind: linkNormal},
 			},
 			{
 				name:     "root cause found after wrapping (via Unwrap())",
 				input:    wrappedLeaf1,
-				expected: RootCauseResult{rootCause: leaf1},
+				expected: RootCauseResult{err: leaf1, kind: linkNormal},
 			},
 			{
 				name:     "root cause found after wrapping (via Cause())",
 				input:    causedLeaf1,
-				expected: RootCauseResult{rootCause: leaf1},
+				expected: RootCauseResult{err: leaf1, kind: linkNormal},
 			},
 			{
 				name:     "root cause is prior if Unwrap() == nil",
 				input:    wrappedEmpty,
-				expected: RootCauseResult{rootCause: wrappedEmpty},
+				expected: RootCauseResult{err: wrappedEmpty, kind: linkNormal},
 			},
 			{
 				name:     "root cause is prior if Cause() == nil",
 				input:    causedEmpty,
-				expected: RootCauseResult{rootCause: causedEmpty},
+				expected: RootCauseResult{err: causedEmpty, kind: linkNormal},
 			},
 		}
 

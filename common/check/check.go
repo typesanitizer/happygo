@@ -124,7 +124,11 @@ func (h Harness) T() *testing.T {
 // AssertSame compares want and got using cmp.Diff and fails with a diff if they differ.
 // Additional cmp options may be provided to customize comparison.
 func AssertSame[T any](h BasicHarness, want, got T, what string, opts ...cmp.Option) {
-	if diff := cmp.Diff(want, got, opts...); diff != "" {
+	defaultOpts := cmp.Options{
+		cmp.AllowUnexported(pathx.AbsPath{}, pathx.RelPath{}, pathx.RootRelPath{}),
+	}
+	allOpts := append(defaultOpts, opts...)
+	if diff := cmp.Diff(want, got, allOpts...); diff != "" {
 		h.Assertf(false, "%s mismatch (-want +got):\n%s", what, diff)
 	}
 }
