@@ -29,14 +29,14 @@ func TestReadDirBatched(t *testing.T) {
 			name := fmt.Sprintf("file-%03d.txt", i)
 			fileRel := parentDir.JoinComponents(name)
 			h.NoErrorf(repoFS.WriteFile(fileRel, []byte("data"), 0o644), "WriteFile(%q)", fileRel)
-			want.Insert(name)
+			want.InsertNew(name)
 		}
 
 		got := collections.NewSet[string]()
 		for entryRes := range repoFS.ReadDir(parentDir) {
 			entry := Do(entryRes.Get())(h)
 			name := entry.BaseName()
-			h.Assertf(got.Insert(name), "duplicate entry %q from ReadDir(%q)", name, parentDir)
+			got.InsertNew(name)
 
 			info := Do(entry.Info())(h)
 			h.Assertf(info.Name() == name, "Info(%q).Name() = %q, want %q", name, info.Name(), name)

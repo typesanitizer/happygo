@@ -42,7 +42,7 @@ func validateForkedFolders(forkedFoldersJSON []ForkedFolderJSON) (map[string]For
 			err = errorx.Join(err, errorx.Wrapf("nostack", parseErr, "forked_folders[%q]", forkedFolderJSON.Folder))
 			continue
 		}
-		if !forkedRepos.Insert(githubRepo) {
+		if !forkedRepos.Insert(githubRepo).AsBool() {
 			err = errorx.Join(err, errorx.Newf("nostack", "forked_folders has duplicate gh_project %q", githubRepo))
 			continue
 		}
