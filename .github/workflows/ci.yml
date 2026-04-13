@@ -6,6 +6,10 @@ on:
     branches:
       - main
 
+permissions:
+  actions: read
+  contents: read
+
 jobs:
   pipeline:
     name: ${{ matrix.os }}
