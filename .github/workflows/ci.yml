@@ -11,6 +11,10 @@ on:
     branches:
       - main
 
+permissions:
+  actions: read
+  contents: read
+
 jobs:
   pipeline:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
