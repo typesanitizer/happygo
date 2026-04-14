@@ -703,13 +703,13 @@ const WorkDoneProgressStyleLog WorkDoneProgressStyle = "log"
 type InteractiveInputType string
 
 const (
-	InteractiveInputTypeString   InteractiveInputType = "string"
-	InteractiveInputTypeFileURI  InteractiveInputType = "fileURI"
-	InteractiveInputTypeBool     InteractiveInputType = "bool"
-	InteractiveInputTypeNumber   InteractiveInputType = "number"
-	InteractiveInputTypeEnum     InteractiveInputType = "enum"
-	InteractiveInputTypeLazyEnum InteractiveInputType = "lazyEnum"
-	InteractiveInputTypeList     InteractiveInputType = "list"
+	InteractiveInputTypeString      InteractiveInputType = "string"
+	InteractiveInputTypeDocumentURI InteractiveInputType = "documentURI"
+	InteractiveInputTypeBool        InteractiveInputType = "bool"
+	InteractiveInputTypeNumber      InteractiveInputType = "number"
+	InteractiveInputTypeEnum        InteractiveInputType = "enum"
+	InteractiveInputTypeLazyEnum    InteractiveInputType = "lazyEnum"
+	InteractiveInputTypeList        InteractiveInputType = "list"
 )
 
 // InternalOptions contains settings that are not intended for use by the
@@ -1100,10 +1100,7 @@ func (o *Options) ForClientCapabilities(clientInfo *protocol.ClientInfo, caps pr
 var codec = frob.CodecFor[*Options]()
 
 func (o *Options) Clone() *Options {
-	data := codec.Encode(o)
-	var clone *Options
-	codec.Decode(data, &clone)
-	return clone
+	return codec.Decode(codec.Encode(o))
 }
 
 // validateDirectoryFilter validates if the filter string
