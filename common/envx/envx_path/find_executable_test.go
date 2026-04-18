@@ -17,6 +17,7 @@ import (
 	"github.com/typesanitizer/happygo/common/envx/envx_path"
 	"github.com/typesanitizer/happygo/common/errorx"
 	"github.com/typesanitizer/happygo/common/fsx"
+	"github.com/typesanitizer/happygo/common/fsx/fsx_testkit"
 	"github.com/typesanitizer/happygo/common/iterx"
 	"github.com/typesanitizer/happygo/common/syscaps"
 )
@@ -32,7 +33,7 @@ func TestFindExecutable(t *testing.T) {
 
 func testFindExecutableHappyPath(h check.Harness) {
 	exe := hostOSExecutable()
-	fakeRoot := baseFakeRoot().JoinComponents("find-executable", "happy-path")
+	fakeRoot := fsx_testkit.FakeRoot().JoinComponents("find-executable", "happy-path")
 
 	h.Run("PATH behavior", func(h check.Harness) {
 		fs := newMemFS(h, fakeRoot.JoinComponents("path-behavior"))
@@ -119,7 +120,7 @@ func testFindExecutableHappyPath(h check.Harness) {
 
 func testFindExecutableErrorCases(h check.Harness) {
 	exe := hostOSExecutable()
-	fakeRoot := baseFakeRoot().JoinComponents("find-executable", "error-cases")
+	fakeRoot := fsx_testkit.FakeRoot().JoinComponents("find-executable", "error-cases")
 
 	h.Run("Missing PATH is invalid", func(h check.Harness) {
 		h.Parallel()
@@ -133,7 +134,7 @@ func testFindExecutableErrorCases(h check.Harness) {
 		h.Parallel()
 
 		fs := newMemFS(h, fakeRoot.JoinComponents("absolute-outside-root"))
-		outsideDir := baseFakeRoot().JoinComponents("outside", "absolute")
+		outsideDir := fsx_testkit.FakeRoot().JoinComponents("outside", "absolute")
 		env := testEnv(map[string]string{"PATH": outsideDir.String()})
 
 		_, err := envx_path.FindExecutable(fs, env, "tool")
@@ -252,7 +253,7 @@ func testFindExecutableErrorCases(h check.Harness) {
 }
 
 func testFindExecutablePreconditions(h check.Harness) {
-	fakeRoot := baseFakeRoot().JoinComponents("find-executable", "preconditions")
+	fakeRoot := fsx_testkit.FakeRoot().JoinComponents("find-executable", "preconditions")
 
 	h.Run("Empty name panics", func(h check.Harness) {
 		h.Parallel()
@@ -281,13 +282,6 @@ func testFindExecutablePreconditions(h check.Harness) {
 func newMemFS(h check.Harness, root AbsPath) fsx.FS {
 	h.T().Helper()
 	return Do(fsx.MemMap(root))(h)
-}
-
-func baseFakeRoot() AbsPath {
-	if runtime.GOOS == "windows" {
-		return NewAbsPath(`C:\virtual-root`)
-	}
-	return NewAbsPath("/virtual-root")
 }
 
 func assertProblemCode(h check.Harness, err error, want errorx.Code) {
