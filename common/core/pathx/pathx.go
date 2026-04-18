@@ -151,6 +151,11 @@ type RelPath struct {
 	value string
 }
 
+// Dot returns a relative path '.'.
+func Dot() RelPath {
+	return RelPath{"."}
+}
+
 // NewRelPath creates a RelPath from a relative path string.
 //
 // Pre-condition: path is non-empty and not absolute per [filepath.IsAbs].

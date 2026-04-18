@@ -11,6 +11,7 @@ import (
 	"github.com/typesanitizer/happygo/common/check"
 	. "github.com/typesanitizer/happygo/common/check/prelude"
 	. "github.com/typesanitizer/happygo/common/core"
+	"github.com/typesanitizer/happygo/common/core/pathx"
 	"github.com/typesanitizer/happygo/common/core/pathx/pathx_testkit"
 	"github.com/typesanitizer/happygo/common/errorx"
 	"github.com/typesanitizer/happygo/common/fsx"
@@ -34,7 +35,7 @@ func TestFSStat(t *testing.T) {
 
 		repoFS := Do(syscaps.FS(NewAbsPath(link)))(h)
 
-		followed := Do(repoFS.Stat(NewRelPath("."), fsx.StatOptions{
+		followed := Do(repoFS.Stat(pathx.Dot(), fsx.StatOptions{
 			FollowFinalSymlink:     true,
 			OnErrorTraverseParents: false,
 		}))(h)
@@ -42,7 +43,7 @@ func TestFSStat(t *testing.T) {
 		h.Assertf(followed.Mode()&os.ModeSymlink == 0,
 			"Stat(., FollowFinalSymlink=true).Mode() = %v, want non-symlink", followed.Mode())
 
-		notFollowed := Do(repoFS.Stat(NewRelPath("."), fsx.StatOptions{
+		notFollowed := Do(repoFS.Stat(pathx.Dot(), fsx.StatOptions{
 			FollowFinalSymlink:     false,
 			OnErrorTraverseParents: false,
 		}))(h)
@@ -90,7 +91,7 @@ func TestFSStat(t *testing.T) {
 
 func joinedRelPath(components []string) RelPath {
 	if len(components) == 0 {
-		return NewRelPath(".")
+		return pathx.Dot()
 	}
 	return NewRelPath(filepath.Join(components...))
 }
