@@ -137,6 +137,75 @@ func TestRelPathComponents(t *testing.T) {
 	}
 }
 
+func TestRelPathAncestors(t *testing.T) {
+	h := check.New(t)
+
+	tests := []struct {
+		path string
+		want []string
+	}{
+		{path: ".", want: nil},
+		{path: "a", want: nil},
+		{path: "a/b", want: []string{"a"}},
+		{path: "a/b/c", want: []string{"a", filepath.Join("a", "b")}},
+		{path: "a/b/c/d", want: []string{"a", filepath.Join("a", "b"), filepath.Join("a", "b", "c")}},
+	}
+
+	for _, tt := range tests {
+		h.Run(tt.path, func(h check.Harness) {
+			got := iterx.Collect(iterx.Map(pathx.NewRelPath(tt.path).Ancestors(), pathx.RelPath.String))
+			check.AssertSame(h, tt.want, got, fmt.Sprintf("Ancestors(%q)", tt.path))
+		})
+	}
+}
+
+func TestRelPathRelativeTo(t *testing.T) {
+	h := check.New(t)
+
+	tests := []struct {
+		path string
+		base string
+		want string
+	}{
+		{path: "a", base: ".", want: "a"},
+		{path: "a/b/c", base: ".", want: filepath.Join("a", "b", "c")},
+		{path: "a", base: "a", want: "."},
+		{path: "a/b/c", base: "a/b/c", want: "."},
+		{path: "a/b", base: "a", want: "b"},
+		{path: "a/b/c", base: "a", want: filepath.Join("b", "c")},
+		{path: "a/b/c", base: "a/b", want: "c"},
+	}
+
+	for _, tt := range tests {
+		h.Run(fmt.Sprintf("%s_from_%s", tt.path, tt.base), func(h check.Harness) {
+			got := pathx.NewRelPath(tt.path).RelativeTo(pathx.NewRelPath(tt.base))
+			check.AssertSame(h, tt.want, got.String(),
+				fmt.Sprintf("RelativeTo(%q, %q)", tt.path, tt.base))
+		})
+	}
+
+	h.Run("PanicsOnNonAncestor", func(h check.Harness) {
+		want := assert.AssertionError{
+			Fmt:  "precondition violation: base %q is not an ancestor of %q",
+			Args: []any{"b", "a"},
+		}
+		h.AssertPanicsWith(want, func() {
+			_ = pathx.NewRelPath("a").RelativeTo(pathx.NewRelPath("b"))
+		})
+	})
+
+	h.Run("PanicsOnSiblingPrefix", func(h check.Harness) {
+		// "ab" has "a" as a string prefix but is not a path-descendant of "a".
+		want := assert.AssertionError{
+			Fmt:  "precondition violation: base %q is not an ancestor of %q",
+			Args: []any{"a", "ab"},
+		}
+		h.AssertPanicsWith(want, func() {
+			_ = pathx.NewRelPath("ab").RelativeTo(pathx.NewRelPath("a"))
+		})
+	})
+}
+
 func TestLexicallyContains(t *testing.T) {
 	h := check.New(t)
 	root := pathx.NewAbsPath(t.TempDir())

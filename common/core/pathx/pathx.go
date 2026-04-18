@@ -183,6 +183,23 @@ func (p RelPath) Join(rel RelPath) RelPath {
 	return NewRelPath(filepath.Join(p.value, rel.value))
 }
 
+// RelativeTo returns p expressed as a relative path from base.
+//
+// Pre-condition: base is an ancestor of p, or equal to p.
+// In particular, base == "." returns p unchanged, and base == p returns ".".
+func (p RelPath) RelativeTo(base RelPath) RelPath {
+	if base.value == "." {
+		return p
+	}
+	suffix, ok := strings.CutPrefix(p.value, base.value)
+	assert.Preconditionf(ok, "base %q is not an ancestor of %q", base.value, p.value)
+	if suffix == "" {
+		return Dot()
+	}
+	assert.Preconditionf(IsPathSeparator(suffix[0]), "base %q is not an ancestor of %q", base.value, p.value)
+	return RelPath{suffix[1:]}
+}
+
 // JoinComponents joins individual path components onto p.
 //
 // Pre-condition: all elements are non-empty and do not contain a path separator.
@@ -194,6 +211,33 @@ func (p RelPath) JoinComponents(pathElems ...string) RelPath {
 		parts = append(parts, elem)
 	}
 	return NewRelPath(filepath.Join(parts...))
+}
+
+// Ancestors returns an iterator over p's ancestor relative paths,
+// in shortest-first order. The receiver itself is not yielded.
+//
+// For example, "a/b/c" yields "a" then "a/b". A path of "."
+// or a single-component path yields nothing.
+func (p RelPath) Ancestors() iter.Seq[RelPath] {
+	return func(yield func(RelPath) bool) {
+		if p.value == "." {
+			return
+		}
+		n := len(p.value)
+		for i := range n {
+			if !IsPathSeparator(p.value[i]) {
+				continue
+			}
+			// A trailing separator means the ancestor would equal the
+			// receiver semantically; stop here.
+			if i == n-1 {
+				return
+			}
+			if !yield(RelPath{p.value[:i]}) {
+				return
+			}
+		}
+	}
 }
 
 func (p RelPath) Components() iter.Seq[string] {
