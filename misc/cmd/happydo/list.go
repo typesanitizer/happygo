@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	. "github.com/typesanitizer/happygo/common/core"
+	"github.com/typesanitizer/happygo/common/core/pathx"
 	"github.com/typesanitizer/happygo/common/errorx"
 	"github.com/typesanitizer/happygo/common/fsx"
 	"github.com/typesanitizer/happygo/common/logx"
@@ -73,7 +74,7 @@ func (w Workspace) listGoModules(logger *logx.Logger, out io.Writer, provenance 
 }
 
 func (w Workspace) goModules(logger *logx.Logger, provenance ListProvenance) ([]fsx.Name, error) {
-	rootRel := NewRelPath(".")
+	rootRel := pathx.Dot()
 	var folders []fsx.Name
 	for entryRes := range w.FS.ReadDir(rootRel) {
 		entry, err := entryRes.Get()

@@ -11,6 +11,7 @@ import (
 	. "github.com/typesanitizer/happygo/common/check/prelude"
 	"github.com/typesanitizer/happygo/common/collections"
 	. "github.com/typesanitizer/happygo/common/core"
+	"github.com/typesanitizer/happygo/common/core/pathx"
 	"github.com/typesanitizer/happygo/common/internal/constants"
 	"github.com/typesanitizer/happygo/common/syscaps"
 )
@@ -24,7 +25,7 @@ func TestFSReadDirBatched(t *testing.T) {
 	rapid.Check(h.T(), func(t *rapid.T) {
 		h := check.NewBasic(t)
 		entryCount := rapid.IntRange(0, constants.ReadDirBatchSize*3).Draw(t, "entry_count")
-		parentDir := Do(repoFS.MkdirTemp(NewRelPath("."), "entries-"))(h)
+		parentDir := Do(repoFS.MkdirTemp(pathx.Dot(), "entries-"))(h)
 
 		want := collections.NewSet[string]()
 		for i := range entryCount {
@@ -75,6 +76,6 @@ func TestFSMkdirTempRejectsEmptyPattern(t *testing.T) {
 	repoFS := Do(syscaps.FS(NewAbsPath(t.TempDir())))(h)
 	want := assert.AssertionError{Fmt: "precondition violation: pattern is empty", Args: nil}
 	h.AssertPanicsWith(want, func() {
-		_, _ = repoFS.MkdirTemp(NewRelPath("."), "")
+		_, _ = repoFS.MkdirTemp(pathx.Dot(), "")
 	})
 }

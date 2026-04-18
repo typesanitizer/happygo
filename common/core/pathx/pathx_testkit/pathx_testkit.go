@@ -45,7 +45,7 @@ func SafeRelPathGen() *rapid.Generator[pathx.RelPath] {
 			}
 		}
 		if len(components) == 0 {
-			return pathx.NewRelPath(".")
+			return pathx.Dot()
 		}
 		// Use strings.Join to avoid the Clean operation invoked by filepath.Join.
 		return pathx.NewRelPath(strings.Join(components, string(filepath.Separator)))
