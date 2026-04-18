@@ -118,3 +118,5 @@ linters:
           msg: use check.NewBasic(t) instead of calling rapid.T methods directly
         - pattern: ^core\.Unimplementedf$
           msg: Unimplementedf is for local development only; do not merge code with unimplemented paths
+        - pattern: ^reflect\.DeepEqual$
+          msg: use check.AssertSame instead of reflect.DeepEqual in tests
