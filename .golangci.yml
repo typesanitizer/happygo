@@ -104,6 +104,8 @@ linters:
           msg: use Harness.Run instead of t.Run
         - pattern: ^testing\.T\.Parallel$
           msg: use Harness.Parallel instead of t.Parallel
+        - pattern: ^os\.IsNotExist$
+          msg: use errorx.GetRootCauseAsValue instead of os.IsNotExist
         - pattern: ^os\.MkdirAll$
           msg: use AbsPath.MkdirAll instead of os.MkdirAll
         - pattern: ^os\.MkdirTemp$

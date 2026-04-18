@@ -23,6 +23,9 @@ import (
 	"github.com/typesanitizer/happygo/common/iterx"
 )
 
+// ErrNotExist is [fs.ErrNotExist], re-exported so callers need not import io/fs.
+var ErrNotExist = iofs.ErrNotExist
+
 // File is an open file handle returned by [FS.Open] and similar methods.
 // It is an alias for [afero.File] so callers need not import afero directly.
 type File = afero.File
@@ -53,13 +56,18 @@ func (e dirEntry) Info() (os.FileInfo, error) {
 	return e.entry.Info()
 }
 
+type BaseFS interface {
+	afero.Fs
+	afero.Lstater
+}
+
 // FS is a rooted filesystem wrapper. All methods operate on paths relative
 // to Root().
 type FS struct {
 	// Stored separately because afero.BasePathFs does not expose its configured
 	// root path back to callers, but fsx needs to provide Root().
 	root AbsPath
-	base afero.Fs
+	base BaseFS
 }
 
 // MemMap returns an in-memory FS rooted at root.
@@ -68,13 +76,15 @@ func MemMap(root AbsPath) (FS, error) {
 	if err := backing.MkdirAll(root.String(), 0o755); err != nil {
 		return FS{}, errorx.Wrapf("+stacks", err, "create fs root %s", root)
 	}
-	return NewRootedFS(root, backing)
+	base, ok := backing.(BaseFS)
+	assert.Invariantf(ok, "NewMemMapFs return value should implement BaseFS, but got type %T", backing)
+	return NewRootedFS(root, base)
 }
 
 // NewRootedFS returns an FS rooted at root and backed by backing.
 //
 // Pre-condition: root must already exist in backing and be a directory.
-func NewRootedFS(root AbsPath, backing afero.Fs) (FS, error) {
+func NewRootedFS(root AbsPath, backing BaseFS) (FS, error) {
 	info, err := backing.Stat(root.String())
 	if err != nil {
 		return FS{}, errorx.Wrapf("+stacks", err, "stat fs root %s", root)
@@ -82,17 +92,15 @@ func NewRootedFS(root AbsPath, backing afero.Fs) (FS, error) {
 	if !info.IsDir() {
 		return FS{}, errorx.Newf("nostack", "fs root %s is not a directory", root)
 	}
-	return FS{root: root, base: afero.NewBasePathFs(backing, root.String())}, nil
+
+	rootedBase, ok := afero.NewBasePathFs(backing, root.String()).(BaseFS)
+	assert.Invariantf(ok, "NewBasePathFs return value should implement BaseFS, but got type %T", backing)
+	return FS{root: root, base: rootedBase}, nil
 }
 
 // Root returns the absolute path this FS is rooted at.
 func (fs FS) Root() AbsPath {
 	return fs.root
-}
-
-// Stat returns file info for the given root-relative path.
-func (fs FS) Stat(rel RelPath) (os.FileInfo, error) {
-	return fs.base.Stat(rel.String())
 }
 
 // ReadDir iterates over directory entries at the given root-relative path.

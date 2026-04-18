@@ -20,12 +20,12 @@ func LexicallyNormalize(path string) string {
 	volumeLen := len(filepath.VolumeName(path))
 	path = path[volumeLen:]
 	if path == "" {
-		if volumeLen > 1 && isPathSeparator(originalPath[0]) && isPathSeparator(originalPath[1]) {
+		if volumeLen > 1 && IsPathSeparator(originalPath[0]) && IsPathSeparator(originalPath[1]) {
 			return filepath.FromSlash(originalPath)
 		}
 		return originalPath + "."
 	}
-	rooted := isPathSeparator(path[0])
+	rooted := IsPathSeparator(path[0])
 
 	// Invariants:
 	//   - We read from path using readPos.
@@ -49,13 +49,13 @@ func LexicallyNormalize(path string) string {
 
 	for readPos < inputLen {
 		switch {
-		case isPathSeparator(path[readPos]):
+		case IsPathSeparator(path[readPos]):
 			// Empty path element.
 			readPos++
-		case path[readPos] == '.' && (readPos+1 == inputLen || isPathSeparator(path[readPos+1])):
+		case path[readPos] == '.' && (readPos+1 == inputLen || IsPathSeparator(path[readPos+1])):
 			// . path element.
 			readPos++
-		case path[readPos] == '.' && path[readPos+1] == '.' && (readPos+2 == inputLen || isPathSeparator(path[readPos+2])):
+		case path[readPos] == '.' && path[readPos+1] == '.' && (readPos+2 == inputLen || IsPathSeparator(path[readPos+2])):
 			// .. path element: remove the previous real element when possible.
 			readPos += 2
 			switch {
@@ -74,7 +74,7 @@ func LexicallyNormalize(path string) string {
 			if (rooted && output.writePos != 1) || (!rooted && output.writePos != 0) {
 				output.appendByte(filepath.Separator)
 			}
-			for ; readPos < inputLen && !isPathSeparator(path[readPos]); readPos++ {
+			for ; readPos < inputLen && !IsPathSeparator(path[readPos]); readPos++ {
 				output.appendByte(path[readPos])
 			}
 		}
@@ -129,7 +129,7 @@ func (b *lexicalBuffer) prependBytes(prefix ...byte) {
 
 func (b *lexicalBuffer) removeLastPathElement(stopPos int) {
 	b.writePos--
-	for b.writePos > stopPos && !isPathSeparator(b.byteAt(b.writePos)) {
+	for b.writePos > stopPos && !IsPathSeparator(b.byteAt(b.writePos)) {
 		b.writePos--
 	}
 }
@@ -154,7 +154,7 @@ func shouldPreserveTrailingSeparator(output *lexicalBuffer, rooted bool) bool {
 	if output.writePos == 2 && output.byteAt(0) == '.' && output.byteAt(1) == '.' {
 		return false
 	}
-	return !isPathSeparator(output.byteAt(output.writePos - 1))
+	return !IsPathSeparator(output.byteAt(output.writePos - 1))
 }
 
 func postLexicallyNormalize(output *lexicalBuffer) {
@@ -162,7 +162,7 @@ func postLexicallyNormalize(output *lexicalBuffer) {
 		return
 	}
 	for _, c := range output.buffer[:output.writePos] {
-		if isPathSeparator(c) {
+		if IsPathSeparator(c) {
 			break
 		}
 		if c == ':' {
@@ -170,7 +170,7 @@ func postLexicallyNormalize(output *lexicalBuffer) {
 			return
 		}
 	}
-	if output.writePos >= 3 && isPathSeparator(output.buffer[0]) && output.buffer[1] == '?' && output.buffer[2] == '?' {
+	if output.writePos >= 3 && IsPathSeparator(output.buffer[0]) && output.buffer[1] == '?' && output.buffer[2] == '?' {
 		output.prependBytes(filepath.Separator, '.')
 	}
 }
@@ -179,10 +179,10 @@ func hasTrailingPathSeparator(path string) bool {
 	if path == "" {
 		return false
 	}
-	return isPathSeparator(path[len(path)-1])
+	return IsPathSeparator(path[len(path)-1])
 }
 
-func isPathSeparator(c byte) bool {
+func IsPathSeparator(c byte) bool {
 	if runtime.GOOS == "windows" {
 		return c == '\\' || c == '/'
 	}
