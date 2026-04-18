@@ -113,7 +113,7 @@ jobs:
           export GOROOT="$PWD/go"
           export PATH="$GOROOT/bin:$PATH"
           patterns=$(go run ./misc/cmd/happydo list --type=go-module --provenance=first-party | sed 's|.*|./&/...|')
-          go test $patterns
+          go test -race $patterns
 
   lint-first-party:
     name: golangci-lint (first-party)
