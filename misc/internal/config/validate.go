@@ -3,6 +3,8 @@ package config
 import (
 	"github.com/typesanitizer/happygo/common/collections"
 	"github.com/typesanitizer/happygo/common/errorx"
+	"github.com/typesanitizer/happygo/common/fsx"
+	"github.com/typesanitizer/happygo/common/fsx/fsx_name"
 )
 
 // Validate checks structural invariants for JSON workspace configuration and builds validated config.
@@ -18,8 +20,8 @@ func (wcJSON WorkspaceConfigJSON) Validate() (WorkspaceConfig, error) {
 	return WorkspaceConfig{ForkedFolders: forkedFolders, BranchMappings: branchMappings}, nil
 }
 
-func validateForkedFolders(forkedFoldersJSON []ForkedFolderJSON) (map[string]ForkedFolder, collections.Set[GitHubRepo], error) {
-	forkedFolders := map[string]ForkedFolder{}
+func validateForkedFolders(forkedFoldersJSON []ForkedFolderJSON) (map[fsx.Name]ForkedFolder, collections.Set[GitHubRepo], error) {
+	forkedFolders := map[fsx.Name]ForkedFolder{}
 	forkedRepos := collections.NewSet[GitHubRepo]()
 	var err error
 
@@ -28,11 +30,11 @@ func validateForkedFolders(forkedFoldersJSON []ForkedFolderJSON) (map[string]For
 	}
 
 	for _, forkedFolderJSON := range forkedFoldersJSON {
-		if forkedFolderJSON.Folder == "" {
-			err = errorx.Join(err, errorx.New("nostack", "forked_folders has empty folder"))
-			continue
+		folder, parseErr := fsx_name.Parse(forkedFolderJSON.Folder)
+		if parseErr != nil {
+			err = errorx.Join(err, errorx.Newf("nostack", "invalid folder value in forked_folders: %v", parseErr))
 		}
-		if _, ok := forkedFolders[forkedFolderJSON.Folder]; ok {
+		if _, ok := forkedFolders[folder]; ok {
 			err = errorx.Join(err, errorx.Newf("nostack", "forked_folders has duplicate folder %q", forkedFolderJSON.Folder))
 			continue
 		}
@@ -47,7 +49,7 @@ func validateForkedFolders(forkedFoldersJSON []ForkedFolderJSON) (map[string]For
 			continue
 		}
 
-		forkedFolders[forkedFolderJSON.Folder] = ForkedFolder{
+		forkedFolders[folder] = ForkedFolder{
 			Folder:     forkedFolderJSON.Folder,
 			GitHubRepo: githubRepo,
 		}

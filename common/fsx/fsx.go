@@ -13,6 +13,7 @@ import (
 	"os"
 
 	"github.com/spf13/afero" //nolint:depguard // fsx is the designated wrapper
+	"github.com/typesanitizer/happygo/common/fsx/fsx_name"
 
 	"github.com/typesanitizer/happygo/common/assert"
 	. "github.com/typesanitizer/happygo/common/core"
@@ -28,8 +29,8 @@ type File = afero.File
 
 // DirEntry is a single entry returned by [FS.ReadDir].
 type DirEntry interface {
-	// BaseName returns just the basename component of the entry.
-	BaseName() string
+	// BaseName returns the basename of the entry as a validated [Name].
+	BaseName() Name
 	IsDir() bool
 	Info() (os.FileInfo, error)
 }
@@ -38,8 +39,10 @@ type dirEntry struct {
 	entry iofs.DirEntry
 }
 
-func (e dirEntry) BaseName() string {
-	return e.entry.Name()
+func (e dirEntry) BaseName() Name {
+	n, err := fsx_name.Parse(e.entry.Name())
+	assert.Invariantf(err == nil, "filesystem returned invalid Name(): %v", err)
+	return n
 }
 
 func (e dirEntry) IsDir() bool {

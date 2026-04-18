@@ -5,12 +5,13 @@ import (
 	"io"
 
 	"github.com/typesanitizer/happygo/common/errorx"
+	"github.com/typesanitizer/happygo/common/fsx"
 )
 
 // WorkspaceConfig is the validated in-memory repository configuration.
 type WorkspaceConfig struct {
 	// ForkedFolders maps folder name to forked folder metadata. Always non-empty.
-	ForkedFolders map[string]ForkedFolder
+	ForkedFolders map[fsx.Name]ForkedFolder
 	// BranchMappings is the validated in-memory branch mapping representation.
 	BranchMappings BranchMappings
 }
@@ -29,7 +30,7 @@ func Load(r io.Reader) (WorkspaceConfig, error) {
 }
 
 // UpstreamForProject resolves the upstream repo and branch config for one project on a local branch.
-func (wc WorkspaceConfig) UpstreamForProject(localBranch string, project string) (UpstreamRepo, error) {
+func (wc WorkspaceConfig) UpstreamForProject(localBranch string, project fsx.Name) (UpstreamRepo, error) {
 	mapping, ok := wc.BranchMappings.ByLocalBranch[localBranch]
 	if !ok {
 		return UpstreamRepo{}, errorx.Newf("nostack", "no branch mapping configured for branch %q", localBranch)

@@ -2,6 +2,7 @@ package collections
 
 import (
 	"cmp"
+	"slices"
 	"sort"
 )
 
@@ -12,6 +13,15 @@ func SortedMapKeys[K cmp.Ordered, V any](m map[K]V) []K {
 		keys = append(keys, k)
 	}
 	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
+	return keys
+}
+
+func SortedMapKeysFunc[K comparable, V any](m map[K]V, cmp func(k1, k2 K) int) []K {
+	keys := make([]K, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	slices.SortFunc(keys, cmp)
 	return keys
 }
 

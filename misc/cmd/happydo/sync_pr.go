@@ -11,6 +11,7 @@ import (
 	"github.com/typesanitizer/happygo/common/cmdx"
 	. "github.com/typesanitizer/happygo/common/core"
 	"github.com/typesanitizer/happygo/common/errorx"
+	"github.com/typesanitizer/happygo/common/fsx"
 	"github.com/typesanitizer/happygo/common/logx"
 )
 
@@ -34,14 +35,14 @@ const (
 // Parent 1 is the local pre-sync commit, and parent 2 is the upstream subtree
 // commit that was pulled. We persist these values in mergebot-* trailers.
 type parsedSubtreeMetadata struct {
-	Dir            Option[string]
+	Dir            Option[fsx.Name]
 	LocalCommit    Option[string]
 	UpstreamCommit Option[string]
 }
 
 // subtreeMetadata is a validated parsedSubtreeMetadata with all fields guaranteed non-empty.
 type subtreeMetadata struct {
-	Dir            string
+	Dir            fsx.Name
 	LocalCommit    string
 	UpstreamCommit string
 }
@@ -58,7 +59,7 @@ func (p parsedSubtreeMetadata) validate() (subtreeMetadata, error) {
 	return subtreeMetadata{Dir: dir, LocalCommit: local, UpstreamCommit: upstream}, nil
 }
 
-func (ws Workspace) runSyncPR(ctx logx.LogCtx, projects []string, options RunSyncPROptions) error {
+func (ws Workspace) runSyncPR(ctx logx.LogCtx, projects []fsx.Name, options RunSyncPROptions) error {
 	assert.Precondition(len(projects) > 0, "must sync 1+ projects")
 	base := options.Base.ValueOr("main")
 	for _, project := range projects {
@@ -72,9 +73,9 @@ func (ws Workspace) runSyncPR(ctx logx.LogCtx, projects []string, options RunSyn
 func runSyncPRProject(
 	ctx logx.LogCtx,
 	runner cmdx.BaseRunner,
-	repoRoot AbsPath, project string, base string,
+	repoRoot AbsPath, project fsx.Name, base string,
 ) error {
-	syncBranch := syncBranchPrefix + project
+	syncBranch := syncBranchPrefix + project.String()
 	fetchCmd := cmdx.New("git", "fetch", "origin", syncBranch).In(repoRoot)
 	if _, err := runner.Run(ctx, fetchCmd, cmdx.RunOptionsDefault()); err != nil {
 		return err
@@ -102,7 +103,7 @@ func runSyncPRProject(
 	if err != nil {
 		return err
 	}
-	projectLabel := "project/" + project
+	projectLabel := "project/" + project.String()
 	ensureSyncLabels := func() error {
 		if err := ensureLabelExists(ctx, runner, repoRoot, projectLabel,
 			"1d76db", "Project-specific sync updates"); err != nil {
@@ -189,9 +190,8 @@ func findOpenPR(
 
 func subtreeMetadataForSyncHead(
 	ctx logx.LogCtx, runner cmdx.BaseRunner,
-	repoRoot AbsPath, project string, headSHA string,
+	repoRoot AbsPath, project fsx.Name, headSHA string,
 ) (subtreeMetadata, error) {
-	assert.Precondition(project != "", "project must be non-empty")
 	assert.Precondition(headSHA != "", "headSHA must be non-empty")
 
 	var emptyMetadata subtreeMetadata
@@ -279,7 +279,7 @@ func formatMergeBody(metadata subtreeMetadata) string {
 	lines := []string{
 		fmt.Sprintf("Pull in changes from upstream commit %s", metadata.UpstreamCommit),
 		"",
-		mergebotSubtreeDirTrailer + ": " + metadata.Dir,
+		mergebotSubtreeDirTrailer + ": " + metadata.Dir.String(),
 		mergebotLocalCommitTrailer + ": " + metadata.LocalCommit,
 		mergebotUpstreamCommitTrailer + ": " + metadata.UpstreamCommit,
 	}
