@@ -3,7 +3,6 @@ package pathx_test
 import (
 	"fmt"
 	"path/filepath"
-	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
@@ -18,6 +17,7 @@ import (
 	"github.com/typesanitizer/happygo/common/core/pathx"
 	"github.com/typesanitizer/happygo/common/core/pathx/pathx_testkit"
 	"github.com/typesanitizer/happygo/common/errorx"
+	"github.com/typesanitizer/happygo/common/iterx"
 )
 
 func TestMakeRelativeTo(t *testing.T) {
@@ -131,11 +131,8 @@ func TestRelPathComponents(t *testing.T) {
 
 	for _, tt := range tests {
 		h.Run(tt.path, func(h check.Harness) {
-			got := make([]string, 0)
-			for c := range pathx.NewRelPath(tt.path).Components() {
-				got = append(got, c)
-			}
-			h.Assertf(reflect.DeepEqual(got, tt.want), "Components(%q) = %#v, want %#v", tt.path, got, tt.want)
+			got := iterx.Collect(pathx.NewRelPath(tt.path).Components())
+			check.AssertSame(h, tt.want, got, fmt.Sprintf("Components(%q)", tt.path))
 		})
 	}
 }
