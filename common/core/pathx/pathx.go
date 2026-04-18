@@ -173,7 +173,7 @@ func (p RelPath) Join(rel RelPath) RelPath {
 
 // JoinComponents joins individual path components onto p.
 //
-// Pre-condition: no element contains a path separator.
+// Pre-condition: all elements are non-empty and do not contain a path separator.
 func (p RelPath) JoinComponents(pathElems ...string) RelPath {
 	parts := make([]string, 0, len(pathElems)+1)
 	parts = append(parts, p.value)

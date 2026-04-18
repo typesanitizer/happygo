@@ -45,7 +45,7 @@ func TestValidateErrors(t *testing.T) {
 			modify: func(c *WorkspaceConfigJSON) {
 				c.ForkedFolders[0].Folder = ""
 			},
-			wantErr: "empty folder",
+			wantErr: "invalid folder value in forked_folders",
 		},
 		{
 			name: "duplicate folder",

@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/typesanitizer/happygo/common/fsx/fsx_name"
 	"github.com/urfave/cli/v3"
 
 	"github.com/typesanitizer/happygo/common/cmdx"
@@ -66,9 +67,14 @@ func main() {
 					&cli.BoolFlag{Name: "persist"},
 				},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
+					projectArg, err := fsx_name.Parse(cmd.String("project"))
+					if err != nil {
+						return errorx.Wrapf("nostack", err, "in argument for --project")
+					}
+
 					ctx, cancel := withTimeout(ctx, 5*time.Minute, cmd.Name)
 					defer cancel()
-					ws, projects, err := resolveProjects(getWorkspace, cmd.String("project"))
+					ws, projects, err := resolveProjects(getWorkspace, projectArg)
 					if err != nil {
 						return err
 					}
@@ -89,9 +95,14 @@ func main() {
 					&cli.StringFlag{Name: "base"},
 				},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
+					projectArg, err := fsx_name.Parse(cmd.String("project"))
+					if err != nil {
+						return errorx.Wrapf("nostack", err, "in argument for --project")
+					}
+
 					ctx, cancel := withTimeout(ctx, 5*time.Minute, cmd.Name)
 					defer cancel()
-					ws, projects, err := resolveProjects(getWorkspace, cmd.String("project"))
+					ws, projects, err := resolveProjects(getWorkspace, projectArg)
 					if err != nil {
 						return err
 					}
@@ -153,18 +164,18 @@ func main() {
 
 // resolveProjects maps "all" to the full forked folder list from workspace config,
 // or validates that a single project name exists in the config.
-func resolveProjects(getWorkspace func() (Workspace, error), project string) (Workspace, []string, error) {
+func resolveProjects(getWorkspace func() (Workspace, error), project fsx.Name) (Workspace, []fsx.Name, error) {
 	ws, err := getWorkspace()
 	if err != nil {
 		return Workspace{}, nil, err
 	}
-	if project == "all" {
-		return ws, collections.SortedMapKeys(ws.Config.ForkedFolders), nil
+	if project.String() == "all" {
+		return ws, collections.SortedMapKeysFunc(ws.Config.ForkedFolders, fsx.Name.Compare), nil
 	}
 	if _, ok := ws.Config.ForkedFolders[project]; !ok {
 		return Workspace{}, nil, errorx.Newf("nostack", "invalid --project %q, not a forked folder", project)
 	}
-	return ws, []string{project}, nil
+	return ws, []fsx.Name{project}, nil
 }
 
 func withTimeout(ctx context.Context, duration time.Duration, cmdName string) (context.Context, context.CancelFunc) {

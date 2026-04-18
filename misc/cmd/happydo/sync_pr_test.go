@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/typesanitizer/happygo/common/check"
+	"github.com/typesanitizer/happygo/common/fsx"
 )
 
 func TestSyncMergeBodyAllTrailers(t *testing.T) {
@@ -12,7 +13,7 @@ func TestSyncMergeBodyAllTrailers(t *testing.T) {
 	h.Parallel()
 
 	metadata := subtreeMetadata{
-		Dir:            "go",
+		Dir:            fsx.NewName("go"),
 		LocalCommit:    "abc123",
 		UpstreamCommit: "def456",
 	}

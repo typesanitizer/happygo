@@ -4,10 +4,12 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
 
+	"github.com/typesanitizer/happygo/common/fsx"
 	"gopkg.in/yaml.v3"
 
 	"github.com/typesanitizer/happygo/common/check"
@@ -27,7 +29,8 @@ func TestWorkspaceConfig(t *testing.T) {
 
 	wsConfig := Do(config.Load(f))(h)
 
-	configFolders := collections.SortedMapKeys(wsConfig.ForkedFolders)
+	configFolders := slices.Collect(iterx.Map(maps.Keys(wsConfig.ForkedFolders), fsx.Name.String))
+	slices.Sort(configFolders)
 
 	repoRoot := DoMsg(pathx.ResolveAbsPath(".."))(h, "resolving repo root").String()
 
@@ -41,7 +44,7 @@ func TestWorkspaceConfig(t *testing.T) {
 		h.Parallel()
 
 		for folder, repo := range forkedProjects {
-			forked, ok := wsConfig.ForkedFolders[folder]
+			forked, ok := wsConfig.ForkedFolders[fsx.NewName(folder)]
 			h.Assertf(ok, "forked folder %q must be present in repo-configuration.json", folder)
 			h.Assertf(forked.GitHubRepo == repo,
 				"forked folder %q has repo %q, want %q", folder, forked.GitHubRepo, repo)

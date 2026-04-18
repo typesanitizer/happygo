@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"sort"
+	"slices"
 
 	. "github.com/typesanitizer/happygo/common/core"
 	"github.com/typesanitizer/happygo/common/errorx"
@@ -66,16 +66,16 @@ func (w Workspace) listGoModules(logger *logx.Logger, out io.Writer, provenance 
 		return err
 	}
 	for _, f := range folders {
-		if _, err := fmt.Fprintln(out, f); err != nil {
+		if _, err := fmt.Fprintln(out, f.String()); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (w Workspace) goModules(logger *logx.Logger, provenance ListProvenance) ([]string, error) {
+func (w Workspace) goModules(logger *logx.Logger, provenance ListProvenance) ([]fsx.Name, error) {
 	rootRel := NewRelPath(".")
-	var folders []string
+	var folders []fsx.Name
 	for entryRes := range w.FS.ReadDir(rootRel) {
 		entry, err := entryRes.Get()
 		if err != nil {
@@ -85,7 +85,7 @@ func (w Workspace) goModules(logger *logx.Logger, provenance ListProvenance) ([]
 			continue
 		}
 		name := entry.BaseName()
-		goModRel := rootRel.JoinComponents(name, "go.mod")
+		goModRel := rootRel.JoinComponents(name.String(), "go.mod")
 		if _, err := w.FS.Stat(goModRel); err != nil {
 			if !os.IsNotExist(err) {
 				logger.Warn("stat go.mod", "dir", name, "err", err)
@@ -106,7 +106,7 @@ func (w Workspace) goModules(logger *logx.Logger, provenance ListProvenance) ([]
 			}
 		}
 	}
-	sort.Strings(folders) // for determinism
+	slices.SortFunc(folders, fsx.Name.Compare) // for determinism
 
 	if len(folders) == 0 {
 		return nil, errorx.Newf("nostack", "no Go modules found matching filter")

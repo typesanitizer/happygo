@@ -23,7 +23,7 @@ type remoteRef struct {
 }
 
 func (ws Workspace) runSyncBranch(
-	ctx logx.LogCtx, projects []string, options RunSyncBranchOptions,
+	ctx logx.LogCtx, projects []fsx.Name, options RunSyncBranchOptions,
 ) (err error) {
 	assert.Precondition(len(projects) > 0, "must sync 1+ projects")
 	baseBranch := options.Base.ValueOr("main")
@@ -56,10 +56,10 @@ func (ws Workspace) runSyncBranch(
 
 func runSyncBranchProject(
 	ctx logx.LogCtx, ws Workspace,
-	project string, worktreeDir RelPath, baseBranch string, push bool,
+	project fsx.Name, worktreeDir RelPath, baseBranch string, push bool,
 ) error {
 	worktreeAbs := ws.FS.Root().Join(worktreeDir)
-	syncBranch := syncBranchPrefix + project
+	syncBranch := syncBranchPrefix + project.String()
 	ctx.Info(
 		"syncing",
 		"project", project, "branch", syncBranch,
@@ -75,7 +75,7 @@ func runSyncBranchProject(
 	if _, err := ws.Runner.Run(ctx, checkoutCmd, cmdx.RunOptionsDefault()); err != nil {
 		return err
 	}
-	if err := ws.runUpdate(ctx, worktreeAbs, baseBranch, []string{project}); err != nil {
+	if err := ws.runUpdate(ctx, worktreeAbs, baseBranch, []fsx.Name{project}); err != nil {
 		return err
 	}
 	if !push {

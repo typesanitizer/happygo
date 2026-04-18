@@ -37,7 +37,7 @@ func TestFSReadDirBatched(t *testing.T) {
 		got := collections.NewSet[string]()
 		for entryRes := range repoFS.ReadDir(parentDir) {
 			entry := Do(entryRes.Get())(h)
-			name := entry.BaseName()
+			name := entry.BaseName().String()
 			got.InsertNew(name)
 
 			info := Do(entry.Info())(h)
