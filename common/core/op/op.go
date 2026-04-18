@@ -17,3 +17,20 @@ const (
 func (res InsertResult) AsBool() bool {
 	return bool(res)
 }
+
+// PlatformSupport reports whether an operation is supported on the current
+// platform.
+type PlatformSupport bool
+
+const (
+	Supported   PlatformSupport = true
+	Unsupported PlatformSupport = false
+)
+
+func (s PlatformSupport) IsSupported() bool {
+	return bool(s)
+}
+
+func (s PlatformSupport) IsUnsupported() bool {
+	return !bool(s)
+}

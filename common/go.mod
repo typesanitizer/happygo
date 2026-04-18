@@ -4,6 +4,7 @@ go 1.24.0
 
 require (
 	al.essio.dev/pkg/shellescape v1.6.0
+	github.com/boyter/gocodewalker v1.5.1
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/charmbracelet/log v0.4.2
 	github.com/cockroachdb/errors v1.12.0

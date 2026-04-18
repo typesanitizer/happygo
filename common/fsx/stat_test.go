@@ -15,6 +15,7 @@ import (
 	"github.com/typesanitizer/happygo/common/core/pathx/pathx_testkit"
 	"github.com/typesanitizer/happygo/common/errorx"
 	"github.com/typesanitizer/happygo/common/fsx"
+	"github.com/typesanitizer/happygo/common/fsx/fsx_testkit"
 	"github.com/typesanitizer/happygo/common/syscaps"
 )
 
@@ -29,8 +30,9 @@ func TestFSStat(t *testing.T) {
 		h.NoErrorf(os.Mkdir(target, 0o755), "Mkdir(%q)", target)
 
 		link := filepath.Join(parent, "link")
-		if err := os.Symlink(target, link); err != nil {
-			h.T().Skipf("skipping: symlinks unavailable: %v", err)
+		support := Do(fsx_testkit.TrySymlink(target, link))(h)
+		if support.IsUnsupported() {
+			h.T().Skipf("symlinks not supported on this platform")
 		}
 
 		repoFS := Do(syscaps.FS(NewAbsPath(link)))(h)
