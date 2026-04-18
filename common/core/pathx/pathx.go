@@ -16,6 +16,9 @@ import (
 	"github.com/typesanitizer/happygo/common/core/option"
 )
 
+// AbsPath carries an absolute path that has gone through [LexicallyNormalize].
+//
+// It is guaranteed to be non-empty.
 type AbsPath struct {
 	value string
 }
@@ -26,7 +29,7 @@ type AbsPath struct {
 func NewAbsPath(path string) AbsPath {
 	assert.Preconditionf(path != "", "path is empty")
 	assert.Preconditionf(filepath.IsAbs(path), "path is not absolute: %q", path)
-	return AbsPath{path}
+	return AbsPath{LexicallyNormalize(path)}
 }
 
 func (p AbsPath) String() string {
@@ -141,6 +144,9 @@ func (p AbsPath) MakeRelativeTo(root AbsPath) option.Option[RootRelPath] {
 	return option.Some(NewRootRelPath(root, NewRelPath(rel)))
 }
 
+// RelPath carries a relative path that has gone through [LexicallyNormalize].
+//
+// It is guaranteed to be non-empty.
 type RelPath struct {
 	value string
 }
@@ -151,9 +157,10 @@ type RelPath struct {
 func NewRelPath(path string) RelPath {
 	assert.Preconditionf(path != "", "path is empty")
 	assert.Preconditionf(!filepath.IsAbs(path), "path is not relative: %q", path)
-	return RelPath{path}
+	return RelPath{LexicallyNormalize(path)}
 }
 
+// String is guaranteed to be "." if a relative path for the current directory.
 func (p RelPath) String() string {
 	return p.value
 }
@@ -245,15 +252,12 @@ func (p RelPath) lexicallyContainsUnix() bool {
 
 // HasPathSeparators reports whether s contains any path separators.
 func HasPathSeparators(s string) bool {
-	if runtime.GOOS == "windows" {
-		for i := range len(s) {
-			if s[i] == '\\' || s[i] == '/' {
-				return true
-			}
+	for i := range len(s) {
+		if isPathSeparator(s[i]) {
+			return true
 		}
-		return false
 	}
-	return strings.Contains(s, "/")
+	return false
 }
 
 type RootRelPath struct {

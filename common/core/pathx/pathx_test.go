@@ -126,7 +126,7 @@ func TestRelPathComponents(t *testing.T) {
 		{path: "a", want: []string{"a"}},
 		{path: "a/b/c", want: []string{"a", "b", "c"}},
 		{path: "a//b///c", want: []string{"a", "b", "c"}},
-		{path: "a/./../b", want: []string{"a", ".", "..", "b"}},
+		{path: "a/./../b", want: []string{"b"}},
 	}
 
 	for _, tt := range tests {
@@ -228,6 +228,67 @@ func TestAppendExtension(t *testing.T) {
 		}
 		h.AssertPanicsWith(want, func() {
 			_ = path.AppendExtension(".exe")
+		})
+	})
+}
+
+func TestLexicallyNormalize(t *testing.T) {
+	h := check.New(t)
+	sep := string(filepath.Separator)
+
+	h.Run("Examples", func(h check.Harness) {
+		tests := []struct {
+			path string
+			want string
+		}{
+			{path: "", want: "."},
+			{path: "a", want: "a"},
+			{path: "a" + sep, want: "a" + sep},
+			{path: "a" + sep + sep, want: "a" + sep},
+			{path: "." + sep, want: "."},
+			{path: ".." + sep, want: ".."},
+			{path: "a" + sep + ".." + sep, want: "."},
+			{path: "a" + sep + "." + sep + ".." + sep + "b" + sep, want: "b" + sep},
+		}
+		if runtime.GOOS == "windows" {
+			tests = append(tests,
+				struct {
+					path string
+					want string
+				}{path: "a/", want: `a\`},
+				struct {
+					path string
+					want string
+				}{path: `a\..\c:`, want: `.\c:`},
+				struct {
+					path string
+					want string
+				}{path: `\a\..\??\c:\x`, want: `\.\??\c:\x`},
+			)
+		}
+
+		for _, tt := range tests {
+			h.Run(strconv.Quote(tt.path), func(h check.Harness) {
+				check.AssertSame(h, tt.want, pathx.LexicallyNormalize(tt.path), "LexicallyNormalize()")
+			})
+		}
+	})
+
+	h.Run("MatchesFilepathCleanWithoutTrailingSeparator", func(h check.Harness) {
+		h.Parallel()
+
+		alphabet := []byte{'a', '.', filepath.Separator}
+		if runtime.GOOS == "windows" {
+			alphabet = append(alphabet, '/')
+		}
+
+		forEachPathString(alphabet, 5, func(path string) {
+			if hasTrailingTestPathSeparator(path) {
+				return
+			}
+			want := filepath.Clean(path)
+			got := pathx.LexicallyNormalize(path)
+			h.Assertf(got == want, "LexicallyNormalize(%q) = %q, want %q", path, got, want)
 		})
 	})
 }
@@ -349,4 +410,33 @@ func TestHasPathSeparators(t *testing.T) {
 			h.Assertf(got == tt.want, "HasPathSeparators(%q) = %v, want %v", tt.value, got, tt.want)
 		})
 	}
+}
+
+func forEachPathString(alphabet []byte, maxLen int, yield func(string)) {
+	buf := make([]byte, maxLen)
+	var visit func(n, pos int)
+	visit = func(n, pos int) {
+		if pos == n {
+			yield(string(buf[:n]))
+			return
+		}
+		for _, c := range alphabet {
+			buf[pos] = c
+			visit(n, pos+1)
+		}
+	}
+	for n := 0; n <= maxLen; n++ {
+		visit(n, 0)
+	}
+}
+
+func hasTrailingTestPathSeparator(path string) bool {
+	if path == "" {
+		return false
+	}
+	last := path[len(path)-1]
+	if runtime.GOOS == "windows" {
+		return last == '\\' || last == '/'
+	}
+	return last == filepath.Separator
 }
