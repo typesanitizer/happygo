@@ -35,7 +35,9 @@ func Env() envx.Env {
 
 // FS returns a rooted filesystem backed by the host operating system.
 func FS(root AbsPath) (fsx.FS, error) {
-	return fsx.NewRootedFS(root, afero.NewOsFs())
+	base, ok := afero.NewOsFs().(fsx.BaseFS)
+	assert.Invariantf(ok, "NewOsFs return value should implement fsx.BaseFS, but got type %T", base)
+	return fsx.NewRootedFS(root, base)
 }
 
 // CmdRunner executes commands using ambient system capabilities.

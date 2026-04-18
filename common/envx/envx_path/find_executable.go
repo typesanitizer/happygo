@@ -81,10 +81,10 @@ func FindExecutable(fs fsx.FS, env envx.Env, name string) (AbsPath, error) {
 			//    then dir.JoinComponents(name) is inside fs.Root() as well.
 			// 4. candidatePaths only potentially appends a file extension.
 			assert.Invariantf(ok, "candidate path %q escaped filesystem root %q", candidatePath, fs.Root())
-			info, err := fs.Stat(rootRel.Rel())
-			if err != nil {
-				if !os.IsNotExist(err) {
-					ignoredPaths = append(ignoredPaths, IgnoredPath{Path: candidatePath, Err: err})
+			info, statErr := fs.Stat(rootRel.Rel(), fsx.StatOptions{FollowFinalSymlink: true, OnErrorTraverseParents: false})
+			if statErr != nil {
+				if !errorx.GetRootCauseAsValue(statErr, fsx.ErrNotExist) {
+					ignoredPaths = append(ignoredPaths, IgnoredPath{Path: candidatePath, Err: statErr})
 				}
 				continue
 			}

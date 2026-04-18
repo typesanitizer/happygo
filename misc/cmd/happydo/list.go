@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"io"
-	"os"
 	"slices"
 
 	. "github.com/typesanitizer/happygo/common/core"
@@ -86,9 +85,9 @@ func (w Workspace) goModules(logger *logx.Logger, provenance ListProvenance) ([]
 		}
 		name := entry.BaseName()
 		goModRel := rootRel.JoinComponents(name.String(), "go.mod")
-		if _, err := w.FS.Stat(goModRel); err != nil {
-			if !os.IsNotExist(err) {
-				logger.Warn("stat go.mod", "dir", name, "err", err)
+		if _, statErr := w.FS.Stat(goModRel, fsx.StatOptions{FollowFinalSymlink: true, OnErrorTraverseParents: false}); statErr != nil {
+			if !errorx.GetRootCauseAsValue(statErr, fsx.ErrNotExist) {
+				logger.Warn("stat go.mod", "dir", name, "err", statErr)
 			}
 			continue
 		}

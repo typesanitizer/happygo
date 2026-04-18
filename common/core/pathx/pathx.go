@@ -253,7 +253,7 @@ func (p RelPath) lexicallyContainsUnix() bool {
 // HasPathSeparators reports whether s contains any path separators.
 func HasPathSeparators(s string) bool {
 	for i := range len(s) {
-		if isPathSeparator(s[i]) {
+		if IsPathSeparator(s[i]) {
 			return true
 		}
 	}
