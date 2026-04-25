@@ -126,6 +126,10 @@ func (p AbsPath) JoinComponents(pathElems ...string) AbsPath {
 	return NewAbsPath(filepath.Join(parts...))
 }
 
+// MakeRelativeTo is the equivalent of filepath.Rel with typed paths.
+//
+// If the receiver and the root are the same, then
+// Some(RootRelPath{root, Rel: "."}) will be returned.
 func (p AbsPath) MakeRelativeTo(root AbsPath) option.Option[RootRelPath] {
 	rel, err := filepath.Rel(root.value, p.value)
 	if err != nil {
