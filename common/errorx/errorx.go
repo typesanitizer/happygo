@@ -45,7 +45,7 @@ func Newf(ist IncludeStackTrace, format string, args ...any) error {
 	}
 }
 
-// Append combines multiple errors into one, filtering out nils.
+// Join combines multiple errors into one, filtering out nils.
 func Join(errs ...error) error {
 	return cockroach.Join(errs...)
 }
