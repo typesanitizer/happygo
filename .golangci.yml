@@ -110,3 +110,5 @@ linters:
           msg: use AbsPath.MkdirTemp instead of os.MkdirTemp
         - pattern: ^pgregory\.net/rapid\.T\.(Errorf|Error|Fatalf|Fatal|FailNow|Fail)$
           msg: use check.NewBasic(t) instead of calling rapid.T methods directly
+        - pattern: ^core\.Unimplementedf$
+          msg: Unimplementedf is for local development only; do not merge code with unimplemented paths
