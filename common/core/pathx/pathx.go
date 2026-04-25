@@ -158,6 +158,15 @@ func (p RelPath) String() string {
 	return p.value
 }
 
+// Dir returns the parent directory of p, or None if p is ".".
+func (p RelPath) Dir() option.Option[RelPath] {
+	parent := filepath.Dir(p.value)
+	if parent == p.value || parent == "." {
+		return option.None[RelPath]()
+	}
+	return option.Some(NewRelPath(parent))
+}
+
 func (p RelPath) Join(rel RelPath) RelPath {
 	return NewRelPath(filepath.Join(p.value, rel.value))
 }

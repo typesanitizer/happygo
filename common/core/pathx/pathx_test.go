@@ -13,6 +13,7 @@ import (
 	"github.com/typesanitizer/happygo/common/assert"
 	"github.com/typesanitizer/happygo/common/check"
 	. "github.com/typesanitizer/happygo/common/check/prelude"
+	"github.com/typesanitizer/happygo/common/core/option"
 	"github.com/typesanitizer/happygo/common/core/pathx"
 	"github.com/typesanitizer/happygo/common/core/pathx/pathx_testkit"
 	"github.com/typesanitizer/happygo/common/errorx"
@@ -157,6 +158,30 @@ func TestLexicallyContains(t *testing.T) {
 		h.Run(tt.path, func(h check.Harness) {
 			got := root.LexicallyContains(pathx.NewRelPath(tt.path))
 			h.Assertf(got == tt.want, "LexicallyContains(%q) = %v, want %v", tt.path, got, tt.want)
+		})
+	}
+}
+
+func TestRelPathDir(t *testing.T) {
+	h := check.New(t)
+	h.Parallel()
+
+	tests := []struct {
+		path string
+		want option.Option[string]
+	}{
+		{path: ".", want: option.None[string]()},
+		{path: "a", want: option.None[string]()},
+		{path: filepath.Join("a", "b"), want: option.Some("a")},
+		{path: filepath.Join("a", "b", "c"), want: option.Some(filepath.Join("a", "b"))},
+	}
+
+	for _, tt := range tests {
+		h.Run(tt.path, func(h check.Harness) {
+			dir, ok := pathx.NewRelPath(tt.path).Dir().Get()
+			got := option.NewOption(dir.String(), ok)
+			h.Assertf(option.Compare(tt.want, got) == 0,
+				"Dir(%q) = %v, want %v", tt.path, got, tt.want)
 		})
 	}
 }
