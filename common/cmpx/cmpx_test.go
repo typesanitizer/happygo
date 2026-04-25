@@ -19,8 +19,8 @@ func TestCompareBool(t *testing.T) {
 
 	testCases := []TestCase{
 		{LHS: false, RHS: false, Want: 0},
-		{LHS: false, RHS: true, Want: 1},
-		{LHS: true, RHS: false, Want: -1},
+		{LHS: false, RHS: true, Want: -1},
+		{LHS: true, RHS: false, Want: 1},
 		{LHS: true, RHS: true, Want: 0},
 	}
 

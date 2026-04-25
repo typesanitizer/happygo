@@ -16,7 +16,8 @@ func TestOption(t *testing.T) {
 		h.Parallel()
 
 		opt := Some(42)
-		h.Assertf(opt.IsSome(), "Some should be present")
+		h.Assertf(opt.IsSome(), "IsSome after Some(..)")
+		h.Assertf(!opt.IsNone(), "Some => !None")
 		v, ok := opt.Get()
 		h.Assertf(ok && v == 42, "Get() = (%d, %v), want (42, true)", v, ok)
 	})
@@ -25,7 +26,8 @@ func TestOption(t *testing.T) {
 		h.Parallel()
 
 		opt := None[int]()
-		h.Assertf(!opt.IsSome(), "None should not be present")
+		h.Assertf(opt.IsNone(), "None() => IsNone")
+		h.Assertf(!opt.IsSome(), "None => !IsSome")
 		_, ok := opt.Get()
 		h.Assertf(!ok, "Get() on None should return false")
 	})
@@ -49,12 +51,28 @@ func TestOption(t *testing.T) {
 		h.Assertf(none.ValueOr(99) == 99, "None().ValueOr(99) = %d, want 99", none.ValueOr(99))
 	})
 
+	h.Run("Compare", func(h check.Harness) {
+		h.Parallel()
+
+		// Both Some: delegates to cmp.Compare on inner values.
+		h.Assertf(Compare(Some(1), Some(2)) < 0, "Some(1) < Some(2)")
+		h.Assertf(Compare(Some(2), Some(2)) == 0, "Some(2) == Some(2)")
+		h.Assertf(Compare(Some(3), Some(2)) > 0, "Some(3) > Some(2)")
+
+		// Both None: equal.
+		h.Assertf(Compare(None[int](), None[int]()) == 0, "None == None")
+
+		// None < Some (absent values sort before present).
+		h.Assertf(Compare(None[int](), Some(0)) < 0, "None < Some(0)")
+		h.Assertf(Compare(Some(0), None[int]()) > 0, "Some(0) > None")
+	})
+
 	h.Run("NewOption", func(h check.Harness) {
 		h.Parallel()
 
 		some := NewOption("hello", true)
 		h.Assertf(some.IsSome(), "NewOption with ok=true should be Some")
 		none := NewOption("hello", false)
-		h.Assertf(!none.IsSome(), "NewOption with ok=false should be None")
+		h.Assertf(none.IsNone(), "NewOption with ok=false should be None")
 	})
 }
