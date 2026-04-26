@@ -181,9 +181,10 @@ func candidatePaths(env envx.Env, base AbsPath) iter.Seq[AbsPath] {
 		pathExt, ok := env.Lookup("PATHEXT").Get()
 		if !ok || pathExt == "" {
 			// Match exec.LookPath's Windows fallback when PATHEXT is unset or empty.
-			pathExt = ".COM;.EXE;.BAT;.CMD"
+			pathExt = ".com;.exe;.bat;.cmd"
 		}
-		for ext := range strings.SplitSeq(pathExt, ";") {
+		// Lowercase to match exec.LookPath behavior (see pathExt() in os/exec).
+		for ext := range strings.SplitSeq(strings.ToLower(pathExt), ";") {
 			if ext == "" {
 				continue
 			}

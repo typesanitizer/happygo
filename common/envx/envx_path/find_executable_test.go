@@ -46,7 +46,7 @@ func testFindExecutableHappyPath(h check.Harness) {
 
 			envVars := map[string]string{"PATH": fs.Root().Join(binRel).String()}
 			if runtime.GOOS == "windows" {
-				envVars["PATHEXT"] = ".COM;.EXE;.BAT;.CMD"
+				envVars["PATHEXT"] = ".com;.exe;.bat;.cmd"
 			}
 			env := testEnv(envVars)
 
@@ -64,7 +64,7 @@ func testFindExecutableHappyPath(h check.Harness) {
 				}, string(os.PathListSeparator)),
 			}
 			if runtime.GOOS == "windows" {
-				envVars["PATHEXT"] = ".COM;.EXE;.BAT;.CMD"
+				envVars["PATHEXT"] = ".com;.exe;.bat;.cmd"
 			}
 			env := testEnv(envVars)
 
@@ -85,7 +85,7 @@ func testFindExecutableHappyPath(h check.Harness) {
 		h.NoErrorf(fs.MkdirAll(binRel, 0o755), "MkdirAll(%q)", binRel)
 
 		h.Run("Empty PATHEXT falls back like exec.LookPath", func(h check.Harness) {
-			exeRel := binRel.JoinComponents("tool.EXE")
+			exeRel := binRel.JoinComponents("tool.exe")
 			writeExecutable(h, fs, exeRel)
 			exePath := root.Join(exeRel)
 
@@ -195,7 +195,7 @@ func testFindExecutableErrorCases(h check.Harness) {
 			h.T().Chdir(root.String())
 			h.T().Setenv("PATH", "bin")
 			if runtime.GOOS == "windows" {
-				h.T().Setenv("PATHEXT", ".COM;.EXE;.BAT;.CMD")
+				h.T().Setenv("PATHEXT", ".com;.exe;.bat;.cmd")
 			}
 
 			wantPath, wantErr := exec.LookPath(exe.LookupName)
@@ -205,7 +205,7 @@ func testFindExecutableErrorCases(h check.Harness) {
 
 			envVars := map[string]string{"PATH": "bin"}
 			if runtime.GOOS == "windows" {
-				envVars["PATHEXT"] = ".COM;.EXE;.BAT;.CMD"
+				envVars["PATHEXT"] = ".com;.exe;.bat;.cmd"
 			}
 			env := testEnv(envVars)
 
@@ -308,7 +308,7 @@ type hostExecutable struct {
 
 func hostOSExecutable() hostExecutable {
 	if runtime.GOOS == "windows" {
-		return hostExecutable{Name: "tool.EXE", LookupName: "tool"}
+		return hostExecutable{Name: "tool.exe", LookupName: "tool"}
 	}
 	return hostExecutable{Name: "tool", LookupName: "tool"}
 }

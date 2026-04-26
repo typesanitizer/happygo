@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -248,7 +249,11 @@ func TestPathFormatting(t *testing.T) {
 	h := check.New(t)
 
 	sep := string(filepath.Separator)
-	absStr := sep + filepath.Join("tmp", "x")
+	absPrefix := sep
+	if runtime.GOOS == "windows" {
+		absPrefix = `C:` + sep
+	}
+	absStr := absPrefix + filepath.Join("tmp", "x")
 	relStr := filepath.Join("a", "b")
 	rootRelStr := relStr // RootRelPath.String() returns just the relative portion.
 
@@ -262,9 +267,9 @@ func TestPathFormatting(t *testing.T) {
 		want      string
 		wantQuote string
 	}{
-		{name: "AbsPath", value: abs, want: absStr, wantQuote: `"` + absStr + `"`},
-		{name: "RelPath", value: rel, want: relStr, wantQuote: `"` + relStr + `"`},
-		{name: "RootRelPath", value: rootRel, want: rootRelStr, wantQuote: `"` + rootRelStr + `"`},
+		{name: "AbsPath", value: abs, want: absStr, wantQuote: strconv.Quote(absStr)},
+		{name: "RelPath", value: rel, want: relStr, wantQuote: strconv.Quote(relStr)},
+		{name: "RootRelPath", value: rootRel, want: rootRelStr, wantQuote: strconv.Quote(rootRelStr)},
 	}
 
 	baseErr := errorx.Newf("nostack", "base")
