@@ -9,11 +9,28 @@ import (
 	"github.com/typesanitizer/happygo/common/core/result"
 )
 
+func Empty[T any]() iter.Seq[T] {
+	return func(func(T) bool) {}
+}
+
 // Collect accumulates all values from an iterator into a slice.
 func Collect[T any](seq iter.Seq[T]) []T {
 	var result []T
 	for v := range seq {
 		result = append(result, v)
+	}
+	return result
+}
+
+// CollectMap accumulates all key-value pairs from an iterator into a map.
+//
+// Pre-condition: seq must not yield duplicate keys.
+func CollectMap[K comparable, V any](seq iter.Seq[pair.KeyValue[K, V]]) map[K]V {
+	result := make(map[K]V)
+	for kv := range seq {
+		_, found := result[kv.Key]
+		assert.Preconditionf(!found, "duplicate key %v", kv.Key)
+		result[kv.Key] = kv.Value
 	}
 	return result
 }
@@ -78,6 +95,18 @@ func FromMap[K comparable, V any](kvs map[K]V) iter.Seq[pair.KeyValue[K, V]] {
 		for k, v := range kvs {
 			if !yield(pair.NewKeyValue(k, v)) {
 				return
+			}
+		}
+	}
+}
+
+func Chain[T any](seqs ...iter.Seq[T]) iter.Seq[T] {
+	return func(yield func(T) bool) {
+		for _, seq := range seqs {
+			for v := range seq {
+				if !yield(v) {
+					return
+				}
 			}
 		}
 	}
