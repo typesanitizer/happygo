@@ -98,10 +98,6 @@ jobs:
 
   test-first-party:
     name: go test (first-party)
-    # Only test on Ubuntu since currently these are mostly meant
-    # to be run in CI, and macOS runners are more limited; don't
-    # want actual macOS testing runners to be occupied by these tests.
-    if: inputs.os == 'ubuntu-latest'
     runs-on: ${{ inputs.os }}
     needs: build-head
     steps:
@@ -121,9 +117,8 @@ jobs:
 
   lint-first-party:
     name: golangci-lint (first-party)
-    # Only test on Ubuntu since currently these are mostly meant
-    # to be run in CI, and macOS runners are more limited; don't
-    # want actual macOS testing runners to be occupied by these tests.
+    # Only lint on Ubuntu; macOS runners are more limited and we
+    # don't want them occupied by lint-only jobs.
     if: inputs.os == 'ubuntu-latest'
     runs-on: ${{ inputs.os }}
     needs: build-head
