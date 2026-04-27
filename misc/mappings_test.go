@@ -29,7 +29,7 @@ func TestWorkspaceConfig(t *testing.T) {
 
 	wsConfig := Do(config.Load(f))(h)
 
-	configFolders := slices.Collect(iterx.Map(maps.Keys(wsConfig.ForkedFolders), fsx.Name.String))
+	configFolders := iterx.Collect(iterx.Map(maps.Keys(wsConfig.ForkedFolders), fsx.Name.String))
 	slices.Sort(configFolders)
 
 	repoRoot := DoMsg(pathx.ResolveAbsPath(".."))(h, "resolving repo root").String()

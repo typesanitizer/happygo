@@ -13,6 +13,17 @@ func Empty[T any]() iter.Seq[T] {
 	return func(func(T) bool) {}
 }
 
+// FromSlice yields the elements of slice in order.
+func FromSlice[S ~[]T, T any](slice S) iter.Seq[T] {
+	return func(yield func(T) bool) {
+		for _, v := range slice {
+			if !yield(v) {
+				return
+			}
+		}
+	}
+}
+
 // Collect accumulates all values from an iterator into a slice.
 func Collect[T any](seq iter.Seq[T]) []T {
 	var result []T
