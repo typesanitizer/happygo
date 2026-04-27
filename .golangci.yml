@@ -108,6 +108,10 @@ linters:
           msg: use AbsPath.MkdirAll instead of os.MkdirAll
         - pattern: ^os\.MkdirTemp$
           msg: use AbsPath.MkdirTemp instead of os.MkdirTemp
+        - pattern: ^slices\.Values$
+          msg: use iterx.FromSlice instead of slices.Values
+        - pattern: ^slices\.Collect$
+          msg: use iterx.Collect instead of slices.Collect
         - pattern: ^pgregory\.net/rapid\.T\.(Errorf|Error|Fatalf|Fatal|FailNow|Fail)$
           msg: use check.NewBasic(t) instead of calling rapid.T methods directly
         - pattern: ^core\.Unimplementedf$

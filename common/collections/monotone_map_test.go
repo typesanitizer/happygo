@@ -8,6 +8,7 @@ import (
 
 	"github.com/typesanitizer/happygo/common/check"
 	"github.com/typesanitizer/happygo/common/core/op"
+	"github.com/typesanitizer/happygo/common/iterx"
 )
 
 func TestMonotoneMap(t *testing.T) {
@@ -27,14 +28,14 @@ func TestMonotoneMap(t *testing.T) {
 
 		h.Assertf(m.InsertOrKeep("b", 4) == op.InsertedNew, "insert of b should report InsertedNew")
 
-		gotKeys := slices.Collect(m.Keys())
+		gotKeys := iterx.Collect(m.Keys())
 		wantKeys := []string{"a", "b"}
 		check.AssertSame(h, wantKeys, gotKeys, "Keys()")
 
 		omit := NewSet[string]()
 		omit.InsertNew("a")
 		filtered := m.CloneWithout(omit)
-		gotFilteredKeys := slices.Collect(filtered.Keys())
+		gotFilteredKeys := iterx.Collect(filtered.Keys())
 		wantFilteredKeys := []string{"b"}
 		check.AssertSame(h, wantFilteredKeys, gotFilteredKeys, "filtered Keys()")
 		h.Assertf(!filtered.Lookup("a").IsSome(), "filtered map unexpectedly contains omitted key")
@@ -54,13 +55,13 @@ func TestMonotoneMap(t *testing.T) {
 
 			m := NewMonotoneMap[int, int]()
 			for i, key := range keys {
-				beforeOrder := slices.Collect(m.Keys())
+				beforeOrder := iterx.Collect(m.Keys())
 				beforeLen := m.Len()
 				beforeValue, hadBefore := m.Lookup(key).Get()
 
 				res := m.InsertOrKeep(key, i)
 
-				afterOrder := slices.Collect(m.Keys())
+				afterOrder := iterx.Collect(m.Keys())
 				got, ok := m.Lookup(key).Get()
 				h.Assertf(ok, "Lookup(%d) returned None after InsertOrKeep", key)
 
@@ -99,13 +100,13 @@ func TestMonotoneMap(t *testing.T) {
 			m := NewMonotoneMap[int, int]()
 			wantLatest := map[int]int{}
 			for i, key := range keys {
-				beforeOrder := slices.Collect(m.Keys())
+				beforeOrder := iterx.Collect(m.Keys())
 				beforeLen := m.Len()
 				beforeIndex := slices.Index(beforeOrder, key)
 
 				old, hadOld := m.InsertOrReplace(key, i).Get()
 
-				afterOrder := slices.Collect(m.Keys())
+				afterOrder := iterx.Collect(m.Keys())
 				afterIndex := slices.Index(afterOrder, key)
 				got, ok := m.Lookup(key).Get()
 				h.Assertf(ok, "Lookup(%d) returned None after InsertOrReplace", key)
@@ -178,7 +179,7 @@ func TestMonotoneMap(t *testing.T) {
 				wantFilteredOrder = append(wantFilteredOrder, key)
 			}
 
-			gotFilteredOrder := slices.Collect(filtered.Keys())
+			gotFilteredOrder := iterx.Collect(filtered.Keys())
 			check.AssertSame(h, wantFilteredOrder, gotFilteredOrder, "filtered Keys()")
 			h.Assertf(filtered.Len() == m.Len()-removedCount,
 				"filtered Len() = %d, want %d", filtered.Len(), m.Len()-removedCount)

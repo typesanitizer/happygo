@@ -40,11 +40,11 @@ func TestEmpty(t *testing.T) {
 			basic := check.NewBasic(t)
 			values := valuesGen.Draw(t, "values")
 
-			left := iterx.Collect(iterx.Chain(iterx.Empty[int](), slices.Values(values)))
+			left := iterx.Collect(iterx.Chain(iterx.Empty[int](), iterx.FromSlice(values)))
 			basic.Assertf(slices.Equal(left, values),
 				"Chain(Empty(), seq) = %#v, want %#v", left, values)
 
-			right := iterx.Collect(iterx.Chain(slices.Values(values), iterx.Empty[int]()))
+			right := iterx.Collect(iterx.Chain(iterx.FromSlice(values), iterx.Empty[int]()))
 			basic.Assertf(slices.Equal(right, values),
 				"Chain(seq, Empty()) = %#v, want %#v", right, values)
 		})
@@ -58,10 +58,10 @@ func TestCollect(t *testing.T) {
 	h.Run("Unit", func(h check.Harness) {
 		h.Parallel()
 
-		got := iterx.Collect(slices.Values([]int{1, 2, 3}))
+		got := iterx.Collect(iterx.FromSlice([]int{1, 2, 3}))
 		h.Assertf(slices.Equal(got, []int{1, 2, 3}), "Collect(seq) = %#v, want %#v", got, []int{1, 2, 3})
 
-		empty := iterx.Collect(slices.Values([]int{}))
+		empty := iterx.Collect(iterx.FromSlice([]int{}))
 		h.Assertf(len(empty) == 0, "Collect(empty) length = %d, want 0", len(empty))
 	})
 
@@ -72,7 +72,7 @@ func TestCollect(t *testing.T) {
 		rapid.Check(h.T(), func(t *rapid.T) {
 			basic := check.NewBasic(t)
 			values := valuesGen.Draw(t, "values")
-			got := iterx.Collect(slices.Values(values))
+			got := iterx.Collect(iterx.FromSlice(values))
 			basic.Assertf(slices.Equal(got, values), "Collect(seq) = %#v, want %#v", got, values)
 		})
 	})
@@ -86,7 +86,7 @@ func TestCollectMap(t *testing.T) {
 		h.Parallel()
 
 		want := map[string]int{"a": 1, "b": 2}
-		got := iterx.CollectMap(slices.Values([]pair.KeyValue[string, int]{
+		got := iterx.CollectMap(iterx.FromSlice([]pair.KeyValue[string, int]{
 			pair.NewKeyValue("a", 1),
 			pair.NewKeyValue("b", 2),
 		}))
@@ -97,7 +97,7 @@ func TestCollectMap(t *testing.T) {
 			Args: []any{"a"},
 		}
 		h.AssertPanicsWith(wantPanic, func() {
-			_ = iterx.CollectMap(slices.Values([]pair.KeyValue[string, int]{
+			_ = iterx.CollectMap(iterx.FromSlice([]pair.KeyValue[string, int]{
 				pair.NewKeyValue("a", 1),
 				pair.NewKeyValue("a", 2),
 			}))
@@ -112,7 +112,7 @@ func TestLast(t *testing.T) {
 	h.Run("Unit", func(h check.Harness) {
 		h.Parallel()
 
-		got := iterx.Last(slices.Values([]int{1, 2, 3}))
+		got := iterx.Last(iterx.FromSlice([]int{1, 2, 3}))
 		h.Assertf(got == 3, "Last([1 2 3]) = %d, want 3", got)
 
 		wantPanic := assert.AssertionError{
@@ -131,7 +131,7 @@ func TestLast(t *testing.T) {
 		rapid.Check(h.T(), func(t *rapid.T) {
 			basic := check.NewBasic(t)
 			values := valuesGen.Draw(t, "values")
-			got := iterx.Last(slices.Values(values))
+			got := iterx.Last(iterx.FromSlice(values))
 			want := values[len(values)-1]
 			basic.Assertf(got == want, "Last(seq) = %d, want %d", got, want)
 		})
@@ -145,10 +145,10 @@ func TestFind(t *testing.T) {
 	h.Run("Unit", func(h check.Harness) {
 		h.Parallel()
 
-		found := iterx.Find(slices.Values([]int{1, 4, 6}), matchEven)
+		found := iterx.Find(iterx.FromSlice([]int{1, 4, 6}), matchEven)
 		h.Assertf(option.Compare(found, option.Some(4)) == 0, "Find first match = %v, want Some(4)", found)
 
-		notFound := iterx.Find(slices.Values([]int{1, 3, 5}), matchEven)
+		notFound := iterx.Find(iterx.FromSlice([]int{1, 3, 5}), matchEven)
 		h.Assertf(option.Compare(notFound, option.None[int]()) == 0,
 			"Find without match = %v, want None", notFound)
 	})
@@ -172,7 +172,7 @@ func TestFind(t *testing.T) {
 				}
 			}
 
-			got := iterx.Find(slices.Values(values), match)
+			got := iterx.Find(iterx.FromSlice(values), match)
 
 			basic.Assertf(option.Compare(got, want) == 0, "Find(seq) = %v, want %v", got, want)
 		})
@@ -186,7 +186,7 @@ func TestMap(t *testing.T) {
 	h.Run("Unit", func(h check.Harness) {
 		h.Parallel()
 
-		got := iterx.Collect(iterx.Map(slices.Values([]int{1, 2, 3}), func(v int) int {
+		got := iterx.Collect(iterx.Map(iterx.FromSlice([]int{1, 2, 3}), func(v int) int {
 			return v * 10
 		}))
 		h.Assertf(slices.Equal(got, []int{10, 20, 30}),
@@ -194,7 +194,7 @@ func TestMap(t *testing.T) {
 
 		calls := 0
 		got = nil
-		iterx.Map(slices.Values([]int{1, 2, 3}), func(v int) int {
+		iterx.Map(iterx.FromSlice([]int{1, 2, 3}), func(v int) int {
 			calls++
 			return v * 10
 		})(func(v int) bool {
@@ -213,7 +213,7 @@ func TestMap(t *testing.T) {
 			basic := check.NewBasic(t)
 			values := valuesGen.Draw(t, "values")
 
-			got := iterx.Collect(iterx.Map(slices.Values(values), func(v int) int {
+			got := iterx.Collect(iterx.Map(iterx.FromSlice(values), func(v int) int {
 				return v*2 + 1
 			}))
 
@@ -235,7 +235,7 @@ func TestUnbatch(t *testing.T) {
 		h.Parallel()
 
 		stopErr := errorx.New("nostack", "stop")
-		seq := iterx.Unbatch(slices.Values([]result.Result[[]int]{
+		seq := iterx.Unbatch(iterx.FromSlice([]result.Result[[]int]{
 			result.Success([]int{1, 2}),
 			result.Failure[[]int](stopErr),
 			result.Success([]int{3}),
@@ -272,7 +272,7 @@ func TestUnbatch(t *testing.T) {
 				want = append(want, batch...)
 			}
 
-			got := collectSuccessValues(basic, iterx.Unbatch(slices.Values(batchResults)))
+			got := collectSuccessValues(basic, iterx.Unbatch(iterx.FromSlice(batchResults)))
 			basic.Assertf(slices.Equal(got, want), "Unbatch(successes) = %#v, want %#v", got, want)
 		})
 	})
@@ -343,7 +343,7 @@ func TestChain(t *testing.T) {
 			second := valuesGen.Draw(t, "second")
 			third := valuesGen.Draw(t, "third")
 
-			got := iterx.Collect(iterx.Chain(slices.Values(first), slices.Values(second), slices.Values(third)))
+			got := iterx.Collect(iterx.Chain(iterx.FromSlice(first), iterx.FromSlice(second), iterx.FromSlice(third)))
 
 			var want []int
 			want = append(want, first...)
