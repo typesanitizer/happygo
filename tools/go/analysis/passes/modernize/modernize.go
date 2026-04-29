@@ -17,7 +17,6 @@ import (
 
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/go/analysis/passes/inspect"
-	"golang.org/x/tools/go/ast/edge"
 	"golang.org/x/tools/go/ast/inspector"
 	"golang.org/x/tools/internal/analysis/analyzerutil"
 	"golang.org/x/tools/internal/refactor"
@@ -38,7 +37,8 @@ var Suite = []*analysis.Analyzer{
 	atomicTypesAnalyzer,
 	// AppendClippedAnalyzer, // not nil-preserving!
 	// BLoopAnalyzer, // may skew benchmark results, see golang/go#74967
-	FmtAppendfAnalyzer,
+	embedLitAnalyzer,
+	// FmtAppendfAnalyzer, // makes code less clear, see golang/go#77581
 	ForVarAnalyzer,
 	MapsLoopAnalyzer,
 	MinMaxAnalyzer,
@@ -119,15 +119,6 @@ func within(pass *analysis.Pass, pkgs ...string) bool {
 	path := pass.Pkg.Path()
 	return packagepath.IsStdPackage(path) &&
 		moreiters.Contains(stdlib.Dependencies(pkgs...), path)
-}
-
-// unparenEnclosing removes enclosing parens from cur in
-// preparation for a call to [Cursor.ParentEdge].
-func unparenEnclosing(cur inspector.Cursor) inspector.Cursor {
-	for cur.ParentEdgeKind() == edge.ParenExpr_X {
-		cur = cur.Parent()
-	}
-	return cur
 }
 
 var (
