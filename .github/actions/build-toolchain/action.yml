@@ -85,3 +85,4 @@ runs:
       with:
         name: go-${{ inputs.toolchain }}-${{ inputs.os }}
         path: go-${{ inputs.toolchain }}-${{ inputs.os }}.tgz
+        retention-days: 1
