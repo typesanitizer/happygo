@@ -2,8 +2,6 @@ package misc_test
 
 import (
 	"maps"
-	"os"
-	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
@@ -15,8 +13,9 @@ import (
 	"github.com/typesanitizer/happygo/common/check"
 	. "github.com/typesanitizer/happygo/common/check/prelude"
 	"github.com/typesanitizer/happygo/common/collections"
-	"github.com/typesanitizer/happygo/common/core/pathx"
+	. "github.com/typesanitizer/happygo/common/core"
 	"github.com/typesanitizer/happygo/common/iterx"
+	"github.com/typesanitizer/happygo/common/syscaps"
 	"github.com/typesanitizer/happygo/misc/internal/config"
 )
 
@@ -24,15 +23,18 @@ func TestWorkspaceConfig(t *testing.T) {
 	h := check.New(t)
 	h.Parallel()
 
-	f := DoMsg(os.Open("repo-configuration.json"))(h, "opening repo-configuration.json")
+	workingDir := DoMsg(syscaps.WorkingDirectory())(h, "resolving working directory")
+	repoRoot, ok := workingDir.Dir().Get()
+	h.Assertf(ok, "working directory %s must have a parent", workingDir)
+	repoFS := DoMsg(syscaps.FS(repoRoot))(h, "opening repo FS")
+
+	f := DoMsg(repoFS.Open(NewRelPath("misc/repo-configuration.json")))(h, "opening repo-configuration.json")
 	t.Cleanup(func() { _ = f.Close() })
 
 	wsConfig := Do(config.Load(f))(h)
 
 	configFolders := iterx.Collect(iterx.Map(maps.Keys(wsConfig.ForkedFolders), fsx.Name.String))
 	slices.Sort(configFolders)
-
-	repoRoot := DoMsg(pathx.ResolveAbsPath(".."))(h, "resolving repo root").String()
 
 	forkedProjects := map[string]config.GitHubRepo{
 		"go":    "golang/go",
@@ -62,7 +64,7 @@ func TestWorkspaceConfig(t *testing.T) {
 	h.Run("WorkflowProjectChoices", func(h check.Harness) {
 		h.Parallel()
 
-		workflowBytes := DoMsg(os.ReadFile(filepath.Join(repoRoot, ".github/workflows/upstream-sync.yml")))(h,
+		workflowBytes := DoMsg(repoFS.ReadFile(NewRelPath(".github/workflows/upstream-sync.yml")))(h,
 			"reading upstream-sync.yml")
 
 		var workflow struct {
@@ -90,7 +92,7 @@ func TestWorkspaceConfig(t *testing.T) {
 	h.Run("LinterExclusions", func(h check.Harness) {
 		h.Parallel()
 
-		lintBytes := DoMsg(os.ReadFile(filepath.Join(repoRoot, ".golangci.yml")))(h,
+		lintBytes := DoMsg(repoFS.ReadFile(NewRelPath(".golangci.yml")))(h,
 			"reading .golangci.yml")
 
 		var lintCfg struct {

@@ -33,6 +33,15 @@ func Env() envx.Env {
 	})
 }
 
+// WorkingDirectory returns the process working directory.
+func WorkingDirectory() (AbsPath, error) {
+	wd, err := os.Getwd()
+	if err != nil {
+		return AbsPath{}, err
+	}
+	return NewAbsPath(wd), nil
+}
+
 // FS returns a rooted filesystem backed by the host operating system.
 func FS(root AbsPath) (fsx.FS, error) {
 	base, ok := afero.NewOsFs().(fsx.BaseFS)

@@ -9,6 +9,7 @@ import (
 	"github.com/typesanitizer/happygo/common/core/pathx"
 	"github.com/typesanitizer/happygo/common/core/result"
 	"github.com/typesanitizer/happygo/common/fsx"
+	"github.com/typesanitizer/happygo/common/fsx/fsx_testkit"
 	"github.com/typesanitizer/happygo/common/fsx/fsx_walk"
 )
 
@@ -17,10 +18,7 @@ import (
 // instead of recursion. This pattern is useful when recursion depth
 // is unbounded or when descent decisions depend on caller state.
 func Example_iterative() {
-	root, err := pathx.ResolveAbsPath("example-root")
-	if err != nil {
-		panic(err)
-	}
+	root := fsx_testkit.FakeRoot().JoinComponents("example-root")
 	fs, err := fsx.MemMap(root)
 	if err != nil {
 		panic(err)

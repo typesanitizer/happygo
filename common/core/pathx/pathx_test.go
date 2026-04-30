@@ -12,7 +12,6 @@ import (
 
 	"github.com/typesanitizer/happygo/common/assert"
 	"github.com/typesanitizer/happygo/common/check"
-	. "github.com/typesanitizer/happygo/common/check/prelude"
 	"github.com/typesanitizer/happygo/common/core/option"
 	"github.com/typesanitizer/happygo/common/core/pathx"
 	"github.com/typesanitizer/happygo/common/core/pathx/pathx_testkit"
@@ -229,6 +228,59 @@ func TestLexicallyContains(t *testing.T) {
 	}
 }
 
+func TestAbsPathDir(t *testing.T) {
+	h := check.New(t)
+	h.Parallel()
+
+	h.Run("Unix", func(h check.Harness) {
+		h.Parallel()
+		if runtime.GOOS == "windows" {
+			h.T().Skip("Unix path semantics")
+		}
+		tests := []struct {
+			path string
+			want option.Option[string]
+		}{
+			{path: "/", want: option.None[string]()},
+			{path: "/a", want: option.Some("/")},
+			{path: "/a/b", want: option.Some("/a")},
+			{path: "/a/b/", want: option.Some("/a/b")},
+		}
+		for _, tt := range tests {
+			h.Run(tt.path, func(h check.Harness) {
+				dir, ok := pathx.NewAbsPath(tt.path).Dir().Get()
+				got := option.NewOption(dir.String(), ok)
+				h.Assertf(option.Compare(tt.want, got) == 0,
+					"Dir(%q) = %v, want %v", tt.path, got, tt.want)
+			})
+		}
+	})
+
+	h.Run("Windows", func(h check.Harness) {
+		h.Parallel()
+		if runtime.GOOS != "windows" {
+			h.T().Skip("Windows path semantics")
+		}
+		tests := []struct {
+			path string
+			want option.Option[string]
+		}{
+			{path: `C:\`, want: option.None[string]()},
+			{path: `C:\a`, want: option.Some(`C:\`)},
+			{path: `C:\a\b`, want: option.Some(`C:\a`)},
+			{path: `C:\a\b\`, want: option.Some(`C:\a\b`)},
+		}
+		for _, tt := range tests {
+			h.Run(tt.path, func(h check.Harness) {
+				dir, ok := pathx.NewAbsPath(tt.path).Dir().Get()
+				got := option.NewOption(dir.String(), ok)
+				h.Assertf(option.Compare(tt.want, got) == 0,
+					"Dir(%q) = %v, want %v", tt.path, got, tt.want)
+			})
+		}
+	})
+}
+
 func TestRelPathDir(t *testing.T) {
 	h := check.New(t)
 	h.Parallel()
@@ -425,11 +477,6 @@ func TestPathFormatting(t *testing.T) {
 	}
 }
 
-func TestResolveAbsPath(t *testing.T) {
-	h := check.New(t)
-	_ = Do(pathx.ResolveAbsPath("."))(h)
-}
-
 func TestRejectsEmptyPaths(t *testing.T) {
 	h := check.New(t)
 	want := assert.AssertionError{Fmt: "precondition violation: path is empty", Args: nil}
@@ -440,7 +487,6 @@ func TestRejectsEmptyPaths(t *testing.T) {
 	}{
 		{name: "NewAbsPath", call: func() { _ = pathx.NewAbsPath("") }},
 		{name: "NewRelPath", call: func() { _ = pathx.NewRelPath("") }},
-		{name: "ResolveAbsPath", call: func() { _, _ = pathx.ResolveAbsPath("") }},
 	}
 
 	for _, tt := range tests {

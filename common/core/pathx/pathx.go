@@ -7,7 +7,6 @@ package pathx
 
 import (
 	"iter"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -36,38 +35,36 @@ func (p AbsPath) String() string {
 	return p.value
 }
 
-func (p AbsPath) Dir() AbsPath {
-	return NewAbsPath(filepath.Dir(p.value))
+// Dir returns the parent directory of p, or None if p is a filesystem root.
+func (p AbsPath) Dir() option.Option[AbsPath] {
+	rootLen := p.rootLen()
+	if len(p.value) == rootLen {
+		return option.None[AbsPath]()
+	}
+	if IsPathSeparator(p.value[len(p.value)-1]) {
+		return option.Some(AbsPath{p.value[:len(p.value)-1]})
+	}
+	lastSep := len(p.value) - 1
+	for lastSep >= rootLen && !IsPathSeparator(p.value[lastSep]) {
+		lastSep--
+	}
+	if lastSep < rootLen {
+		return option.Some(AbsPath{p.value[:rootLen]})
+	}
+	return option.Some(AbsPath{p.value[:lastSep]})
+}
+
+func (p AbsPath) rootLen() int {
+	rootLen := len(filepath.VolumeName(p.value))
+	if rootLen < len(p.value) && IsPathSeparator(p.value[rootLen]) {
+		rootLen++
+	}
+	return rootLen
 }
 
 func (p AbsPath) Split() (AbsPath, string) {
 	dir, file := filepath.Split(p.value)
 	return NewAbsPath(dir), file
-}
-
-// ResolveAbsPath resolves a possibly-relative path to an AbsPath
-// using [filepath.Abs].
-//
-// Pre-condition: path is non-empty.
-func ResolveAbsPath(path string) (AbsPath, error) {
-	assert.Preconditionf(path != "", "path is empty")
-	absPath, err := filepath.Abs(path)
-	if err != nil {
-		return AbsPath{}, err
-	}
-	return NewAbsPath(absPath), nil
-}
-
-func (p AbsPath) MkdirAll(perm os.FileMode) error {
-	return os.MkdirAll(p.value, perm)
-}
-
-func (p AbsPath) ReadFile() ([]byte, error) {
-	return os.ReadFile(p.value)
-}
-
-func (p AbsPath) WriteFile(data []byte, perm os.FileMode) error {
-	return os.WriteFile(p.value, data, perm)
 }
 
 // LexicallyContains reports whether child is lexically contained within p.
