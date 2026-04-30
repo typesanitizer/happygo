@@ -2,26 +2,22 @@
 package fsx_testkit
 
 import (
+	"iter"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
 
-	"github.com/spf13/afero" //nolint:depguard // fsx_testkit needs to build test backing filesystems.
-
-	"github.com/typesanitizer/happygo/common/assert"
 	"github.com/typesanitizer/happygo/common/check"
 	. "github.com/typesanitizer/happygo/common/core"
 	"github.com/typesanitizer/happygo/common/errorx"
 	"github.com/typesanitizer/happygo/common/fsx"
 )
 
-func NewMemFS(h check.Harness, tree map[string]string) fsx.FS {
+func NewMemFS(h check.Harness) fsx.FS {
 	h.T().Helper()
 	root := FakeRoot()
 	fs, err := fsx.MemMap(root)
 	h.NoErrorf(err, "MemMap(%q)", root)
-	WriteTree(h, fs, tree)
 	return fs
 }
 
@@ -45,19 +41,11 @@ func WriteTree(h check.Harness, fs fsx.FS, tree map[string]string) {
 	}
 }
 
-// NewFaultyFS returns an in-memory fsx.FS rooted at root that injects
-// failures for configured operations.
-func NewFaultyFS(h check.Harness, root AbsPath, tree map[string]string, faults ...Fault) fsx.FS {
+// NewFaultyFS returns an fsx.FS wrapper that injects failures for configured
+// operations.
+func NewFaultyFS(h check.Harness, base fsx.FS, faults ...Fault) fsx.FS {
 	h.T().Helper()
-	backing, ok := afero.NewMemMapFs().(fsx.BaseFS)
-	h.Assertf(ok, "NewMemMapFs() = %T, want fsx.BaseFS", backing)
-	h.NoErrorf(backing.MkdirAll(root.String(), 0o755), "MkdirAll(%q)", root)
-	memMapFS, err := fsx.NewRootedFS(root, backing)
-	h.NoErrorf(err, "NewRootedFS(%q)", root)
-	WriteTree(h, memMapFS, tree)
-	fs, err := fsx.NewRootedFS(root, newFaultyBaseFS(backing, root, faults...))
-	h.NoErrorf(err, "NewRootedFS(%q, FaultyFS)", root)
-	return fs
+	return newFaultyFS(base, faults...)
 }
 
 // FaultOp identifies the filesystem operation to fail.
@@ -74,46 +62,52 @@ type Fault struct {
 	Rel RelPath
 }
 
-// faultyFS wraps an fsx.BaseFS and injects failures for configured operations.
+// faultyFS wraps an fsx.FS and injects failures for configured operations.
 type faultyFS struct {
-	fsx.BaseFS
-	root   AbsPath
+	fsx.FS
 	faults map[Fault]struct{}
 }
 
-func newFaultyBaseFS(base fsx.BaseFS, root AbsPath, faults ...Fault) *faultyFS {
+func newFaultyFS(base fsx.FS, faults ...Fault) *faultyFS {
 	faultSet := make(map[Fault]struct{}, len(faults))
 	for _, f := range faults {
 		faultSet[f] = struct{}{}
 	}
-	return &faultyFS{BaseFS: base, root: root, faults: faultSet}
+	return &faultyFS{FS: base, faults: faultSet}
 }
 
-func (fs *faultyFS) Stat(absPath string) (os.FileInfo, error) {
-	if fs.hasFault(FaultOp_Stat, absPath) {
+func (fs *faultyFS) Stat(rel RelPath, opts fsx.StatOptions) (os.FileInfo, error) {
+	if fs.hasFault(FaultOp_Stat, rel) {
 		return nil, injectedFSError()
 	}
-	return fs.BaseFS.Stat(absPath)
+	return fs.FS.Stat(rel, opts)
 }
 
-func (fs *faultyFS) LstatIfPossible(absPath string) (os.FileInfo, bool, error) {
-	if fs.hasFault(FaultOp_Stat, absPath) {
-		return nil, false, injectedFSError()
-	}
-	return fs.BaseFS.LstatIfPossible(absPath)
-}
-
-func (fs *faultyFS) Open(absPath string) (fsx.File, error) {
-	if fs.hasFault(FaultOp_Open, absPath) {
+func (fs *faultyFS) Open(rel RelPath) (fsx.File, error) {
+	if fs.hasFault(FaultOp_Open, rel) {
 		return nil, injectedFSError()
 	}
-	return fs.BaseFS.Open(absPath)
+	return fs.FS.Open(rel)
 }
 
-func (fs *faultyFS) hasFault(op FaultOp, absPath string) bool {
-	rel, err := filepath.Rel(fs.root.String(), absPath)
-	assert.Invariantf(err == nil, "filepath.Rel(%q, %q): %v", fs.root, absPath, err)
-	_, hit := fs.faults[Fault{Op: op, Rel: NewRelPath(rel)}]
+func (fs *faultyFS) ReadFile(rel RelPath) ([]byte, error) {
+	if fs.hasFault(FaultOp_Open, rel) {
+		return nil, injectedFSError()
+	}
+	return fs.FS.ReadFile(rel)
+}
+
+func (fs *faultyFS) ReadDir(rel RelPath) iter.Seq[Result[fsx.DirEntry]] {
+	if fs.hasFault(FaultOp_Open, rel) {
+		return func(yield func(Result[fsx.DirEntry]) bool) {
+			yield(Failure[fsx.DirEntry](injectedFSError()))
+		}
+	}
+	return fs.FS.ReadDir(rel)
+}
+
+func (fs *faultyFS) hasFault(op FaultOp, rel RelPath) bool {
+	_, hit := fs.faults[Fault{Op: op, Rel: rel}]
 	return hit
 }
 
