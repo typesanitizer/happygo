@@ -11,7 +11,16 @@ import (
 	. "github.com/typesanitizer/happygo/common/core"
 	"github.com/typesanitizer/happygo/common/errorx"
 	"github.com/typesanitizer/happygo/common/fsx"
+	"github.com/typesanitizer/happygo/common/syscaps"
 )
+
+// TempDirFS returns a host FS rooted at a new test temporary directory.
+func TempDirFS(h check.Harness) fsx.FS {
+	h.T().Helper()
+	fs, err := syscaps.FS(NewAbsPath(h.T().TempDir()))
+	h.NoErrorf(err, "FS(TempDir())")
+	return fs
+}
 
 func NewMemFS(h check.Harness) fsx.FS {
 	h.T().Helper()
@@ -19,6 +28,15 @@ func NewMemFS(h check.Harness) fsx.FS {
 	fs, err := fsx.MemMap(root)
 	h.NoErrorf(err, "MemMap(%q)", root)
 	return fs
+}
+
+// WriteFile writes a single file, creating parent directories as needed.
+func WriteFile(h check.Harness, fs fsx.FS, path RelPath, content string) {
+	h.T().Helper()
+	if dir, ok := path.Dir().Get(); ok {
+		h.NoErrorf(fs.MkdirAll(dir, 0o755), "MkdirAll(%q)", dir)
+	}
+	h.NoErrorf(fs.WriteFile(path, []byte(content), 0o644), "WriteFile(%q)", path)
 }
 
 // WriteTree creates files and directories in fs from a map.
@@ -34,10 +52,7 @@ func WriteTree(h check.Harness, fs fsx.FS, tree map[string]string) {
 			h.NoErrorf(fs.MkdirAll(rel, 0o755), "MkdirAll(%q)", rel)
 			continue
 		}
-		if dir, ok := rel.Dir().Get(); ok {
-			h.NoErrorf(fs.MkdirAll(dir, 0o755), "MkdirAll(%q)", dir)
-		}
-		h.NoErrorf(fs.WriteFile(rel, []byte(content), 0o644), "WriteFile(%q)", rel)
+		WriteFile(h, fs, rel, content)
 	}
 }
 

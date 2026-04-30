@@ -12,15 +12,15 @@ import (
 	"github.com/typesanitizer/happygo/common/collections"
 	. "github.com/typesanitizer/happygo/common/core"
 	"github.com/typesanitizer/happygo/common/core/pathx"
+	"github.com/typesanitizer/happygo/common/fsx/fsx_testkit"
 	"github.com/typesanitizer/happygo/common/internal/constants"
-	"github.com/typesanitizer/happygo/common/syscaps"
 )
 
 func TestFSReadDirBatched(t *testing.T) {
 	h := check.New(t)
 	h.Parallel()
 
-	repoFS := Do(syscaps.FS(NewAbsPath(t.TempDir())))(h)
+	repoFS := fsx_testkit.TempDirFS(h)
 
 	rapid.Check(h.T(), func(t *rapid.T) {
 		h := check.NewBasic(t)
@@ -55,7 +55,7 @@ func TestFSReadDirOnFileReturnsError(t *testing.T) {
 	h := check.New(t)
 	h.Parallel()
 
-	repoFS := Do(syscaps.FS(NewAbsPath(t.TempDir())))(h)
+	repoFS := fsx_testkit.TempDirFS(h)
 
 	fileRel := NewRelPath("file.txt")
 	h.NoErrorf(repoFS.WriteFile(fileRel, []byte("data"), 0o644), "WriteFile(%q)", fileRel)
@@ -73,7 +73,7 @@ func TestFSMkdirTempRejectsEmptyPattern(t *testing.T) {
 	h := check.New(t)
 	h.Parallel()
 
-	repoFS := Do(syscaps.FS(NewAbsPath(t.TempDir())))(h)
+	repoFS := fsx_testkit.TempDirFS(h)
 	want := assert.AssertionError{Fmt: "precondition violation: pattern is empty", Args: nil}
 	h.AssertPanicsWith(want, func() {
 		_, _ = repoFS.MkdirTemp(pathx.Dot(), "")

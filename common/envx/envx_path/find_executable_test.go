@@ -150,9 +150,8 @@ func testFindExecutableErrorCases(h check.Harness) {
 
 		fs := newMemFS(h, fakeRoot.JoinComponents("non-executable-candidates"))
 		binRel := NewRelPath("bin")
-		h.NoErrorf(fs.MkdirAll(binRel, 0o755), "MkdirAll(%q)", binRel)
 		exeRel := binRel.JoinComponents(exe.Name)
-		h.NoErrorf(fs.WriteFile(exeRel, []byte("#!/bin/sh\n"), 0o644), "WriteFile(%q)", exeRel)
+		fsx_testkit.WriteFile(h, fs, exeRel, "#!/bin/sh\n")
 
 		env := testEnv(map[string]string{"PATH": fs.Root().Join(binRel).String()})
 		_, err := envx_path.FindExecutable(fs, env, exe.LookupName)
