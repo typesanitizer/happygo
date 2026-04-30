@@ -19,7 +19,7 @@ import (
 // opts.OnErrorTraverseParents is true, StatError.ShortestMissing() returns the
 // shallowest ancestor that does not exist. Otherwise, ShortestMissing()
 // returns rel.
-func (fs FS) Stat(rel RelPath, opts StatOptions) (os.FileInfo, error) {
+func (fs rootedFS) Stat(rel RelPath, opts StatOptions) (os.FileInfo, error) {
 	var info os.FileInfo
 	var err error
 	if opts.FollowFinalSymlink {

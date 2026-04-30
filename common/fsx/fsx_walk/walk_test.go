@@ -36,7 +36,8 @@ func TestWalk(t *testing.T) {
 		h.Run("SkipSubtree", func(h check.Harness) {
 			h.Parallel()
 
-			fs := fsx_testkit.NewMemFS(h, map[string]string{
+			fs := fsx_testkit.NewMemFS(h)
+			fsx_testkit.WriteTree(h, fs, map[string]string{
 				"a/":           "",
 				"a/skip/":      "",
 				"a/skip/y.txt": "y",
@@ -83,7 +84,8 @@ func testGitIgnore(h check.Harness) {
 	h.Run("RespectGitIgnore", func(h check.Harness) {
 		h.Parallel()
 
-		fs := fsx_testkit.NewMemFS(h, map[string]string{
+		fs := fsx_testkit.NewMemFS(h)
+		fsx_testkit.WriteTree(h, fs, map[string]string{
 			".git": "gitdir: root\n",
 			".gitignore": `.git
 ignored/
@@ -109,7 +111,8 @@ ignored/
 	h.Run("RequiresFSRootRepo", func(h check.Harness) {
 		h.Parallel()
 
-		fs := fsx_testkit.NewMemFS(h, map[string]string{
+		fs := fsx_testkit.NewMemFS(h)
+		fsx_testkit.WriteTree(h, fs, map[string]string{
 			".gitignore": "*.txt\n",
 			"file.txt":   "x",
 		})
@@ -135,7 +138,8 @@ func testFaults(h check.Harness) {
 	h.Run("InitialRootStat", func(h check.Harness) {
 		h.Parallel()
 
-		fs := fsx_testkit.NewMemFS(h, map[string]string{"a.txt": "a"})
+		fs := fsx_testkit.NewMemFS(h)
+		fsx_testkit.WriteTree(h, fs, map[string]string{"a.txt": "a"})
 		h.NoErrorf(fs.RemoveAll(pathx.Dot()), "RemoveAll(.)")
 
 		_, err := fsx_walk.WalkNonDet(fs, pathx.Dot(), fsx_walk.WalkOptions{RespectGitIgnore: false})
@@ -149,7 +153,7 @@ func testFaults(h check.Harness) {
 	h.Run("InitialGitStat", func(h check.Harness) {
 		h.Parallel()
 
-		fs := fsx_testkit.NewFaultyFS(h, fsx_testkit.FakeRoot(), map[string]string{}, fsx_testkit.Fault{Op: fsx_testkit.FaultOp_Stat, Rel: pathx.NewRelPath(".git")})
+		fs := fsx_testkit.NewFaultyFS(h, fsx_testkit.NewMemFS(h), fsx_testkit.Fault{Op: fsx_testkit.FaultOp_Stat, Rel: pathx.NewRelPath(".git")})
 
 		_, err := fsx_walk.WalkNonDet(fs, pathx.Dot(), fsx_walk.WalkOptions{RespectGitIgnore: true})
 		_ = requireWalkError(h, err, fsx_walk.WalkErrorKind_IOFailed)
@@ -158,10 +162,12 @@ func testFaults(h check.Harness) {
 	h.Run("IterateGitStat", func(h check.Harness) {
 		h.Parallel()
 
-		fs := fsx_testkit.NewFaultyFS(h, fsx_testkit.FakeRoot(), map[string]string{
+		baseFS := fsx_testkit.NewMemFS(h)
+		fsx_testkit.WriteTree(h, baseFS, map[string]string{
 			".git": "gitdir: root\n",
 			"a/":   "",
-		}, fsx_testkit.Fault{Op: fsx_testkit.FaultOp_Stat, Rel: pathx.NewRelPath("a/.git")})
+		})
+		fs := fsx_testkit.NewFaultyFS(h, baseFS, fsx_testkit.Fault{Op: fsx_testkit.FaultOp_Stat, Rel: pathx.NewRelPath("a/.git")})
 
 		entries := Do(fsx_walk.WalkNonDet(fs, pathx.Dot(), fsx_walk.WalkOptions{RespectGitIgnore: true}))(h)
 		_ = requireWalkError(h, firstWalkError(h, entries), fsx_walk.WalkErrorKind_IOFailed)
@@ -170,10 +176,12 @@ func testFaults(h check.Harness) {
 	h.Run("IterateGitIgnoreRead", func(h check.Harness) {
 		h.Parallel()
 
-		fs := fsx_testkit.NewFaultyFS(h, fsx_testkit.FakeRoot(), map[string]string{
+		baseFS := fsx_testkit.NewMemFS(h)
+		fsx_testkit.WriteTree(h, baseFS, map[string]string{
 			".git": "gitdir: root\n",
 			"a/":   "",
-		}, fsx_testkit.Fault{Op: fsx_testkit.FaultOp_Open, Rel: pathx.NewRelPath("a/.gitignore")})
+		})
+		fs := fsx_testkit.NewFaultyFS(h, baseFS, fsx_testkit.Fault{Op: fsx_testkit.FaultOp_Open, Rel: pathx.NewRelPath("a/.gitignore")})
 
 		entries := Do(fsx_walk.WalkNonDet(fs, pathx.Dot(), fsx_walk.WalkOptions{RespectGitIgnore: true}))(h)
 		_ = requireWalkError(h, firstWalkError(h, entries), fsx_walk.WalkErrorKind_IOFailed)
@@ -182,9 +190,11 @@ func testFaults(h check.Harness) {
 	h.Run("IterateReadDir", func(h check.Harness) {
 		h.Parallel()
 
-		fs := fsx_testkit.NewFaultyFS(h, fsx_testkit.FakeRoot(), map[string]string{
+		baseFS := fsx_testkit.NewMemFS(h)
+		fsx_testkit.WriteTree(h, baseFS, map[string]string{
 			"a/": "",
-		}, fsx_testkit.Fault{Op: fsx_testkit.FaultOp_Open, Rel: pathx.NewRelPath("a")})
+		})
+		fs := fsx_testkit.NewFaultyFS(h, baseFS, fsx_testkit.Fault{Op: fsx_testkit.FaultOp_Open, Rel: pathx.NewRelPath("a")})
 
 		entries := Do(fsx_walk.WalkNonDet(fs, pathx.Dot(), fsx_walk.WalkOptions{RespectGitIgnore: false}))(h)
 		_ = requireWalkError(h, firstWalkError(h, entries), fsx_walk.WalkErrorKind_IOFailed)
@@ -192,7 +202,8 @@ func testFaults(h check.Harness) {
 }
 
 func testGitIgnore_OnExplicitSubtree(h check.Harness) {
-	fs := fsx_testkit.NewMemFS(h, map[string]string{
+	fs := fsx_testkit.NewMemFS(h)
+	fsx_testkit.WriteTree(h, fs, map[string]string{
 		".git": "gitdir: root\n",
 		".gitignore": `.git
 blocked/
@@ -245,7 +256,8 @@ blocked/
 }
 
 func testGitIgnore_ResetsAtNestedRepo(h check.Harness) {
-	fs := fsx_testkit.NewMemFS(h, map[string]string{
+	fs := fsx_testkit.NewMemFS(h)
+	fsx_testkit.WriteTree(h, fs, map[string]string{
 		".git": "gitdir: root\n",
 		".gitignore": `.git
 *.txt
@@ -283,7 +295,8 @@ func testGitIgnore_ResetsAtNestedRepo(h check.Harness) {
 func testGitIgnore_SkipsIgnoredNestedRepo(h check.Harness) {
 	h.Parallel()
 
-	fs := fsx_testkit.NewMemFS(h, map[string]string{
+	fs := fsx_testkit.NewMemFS(h)
+	fsx_testkit.WriteTree(h, fs, map[string]string{
 		".git": "gitdir: root\n",
 		".gitignore": `.git
 nested/
@@ -302,7 +315,8 @@ nested/
 func testGitIgnore_PreservesAllParseErrors(h check.Harness) {
 	h.Parallel()
 
-	fs := fsx_testkit.NewMemFS(h, map[string]string{
+	fs := fsx_testkit.NewMemFS(h)
+	fsx_testkit.WriteTree(h, fs, map[string]string{
 		".git": "gitdir: root\n",
 		".gitignore": `!
 ** *
@@ -335,7 +349,8 @@ func testGitIgnore_PreservesAllParseErrors(h check.Harness) {
 func testGitIgnore_ConcurrentSiblingWarnings(h check.Harness) {
 	h.Parallel()
 
-	fs := fsx_testkit.NewMemFS(h, map[string]string{
+	fs := fsx_testkit.NewMemFS(h)
+	fsx_testkit.WriteTree(h, fs, map[string]string{
 		".git":         "gitdir: root\n",
 		"a/":           "",
 		"a/.gitignore": "!\n",
