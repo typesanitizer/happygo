@@ -3,6 +3,7 @@ package check
 
 import (
 	"flag"
+	"os"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -131,36 +132,24 @@ func AssertSame[T any](h BasicHarness, want, got T, what string, opts ...cmp.Opt
 	}
 }
 
-// InputPath keeps both user-provided and resolved path forms.
-type InputPath struct {
-	Input    string
-	Resolved AbsPath
-}
-
-func NewInputPath(input string) (InputPath, error) {
-	resolved, err := pathx.ResolveAbsPath(input)
-	if err != nil {
-		return InputPath{}, err
-	}
-	return InputPath{Input: input, Resolved: resolved}, nil
+// SnapshotFS is the filesystem capability needed by snapshots.
+type SnapshotFS interface {
+	ReadFile(RelPath) ([]byte, error)
+	WriteFile(RelPath, []byte, os.FileMode) error
+	MkdirAll(RelPath, os.FileMode) error
 }
 
 // Snapshot holds a path for file-based snapshot comparison.
 type Snapshot struct {
 	harness Harness
-	path    InputPath
+	fs      SnapshotFS
+	path    RelPath
 }
 
-// SnapshotAt returns a Snapshot for the given file path.
-// The path must resolve to a location inside the current working directory.
-func (h Harness) SnapshotAt(path string) Snapshot {
+// SnapshotAt returns a Snapshot for the given path in fs.
+func (h Harness) SnapshotAt(fs SnapshotFS, path RelPath) Snapshot {
 	h.t.Helper()
-	cwd, err := pathx.ResolveAbsPath(".")
-	h.NoErrorf(err, "resolving working directory")
-	snapshot, err := NewInputPath(path)
-	h.NoErrorf(err, "resolving absolute path for %q", path)
-	h.Assertf(snapshot.Resolved.MakeRelativeTo(cwd).IsSome(), "snapshot path %q escapes working directory", path)
-	return Snapshot{harness: h, path: snapshot}
+	return Snapshot{harness: h, fs: fs, path: path}
 }
 
 // Matches compares got to the snapshot file. If -update is set,
@@ -169,16 +158,18 @@ func (s Snapshot) Matches(got string) {
 	s.harness.t.Helper()
 
 	if IsUpdateFlagSet() {
-		s.harness.NoErrorf(s.path.Resolved.Dir().MkdirAll(0o755),
-			"creating parent directory for snapshot %s", s.path.Resolved.String())
-		s.harness.NoErrorf(s.path.Resolved.WriteFile([]byte(got), 0o644),
-			"writing snapshot %s", s.path.Resolved.String())
-		s.harness.Logf("updated snapshot: %s", s.path.Input)
+		if dir, ok := s.path.Dir().Get(); ok {
+			s.harness.NoErrorf(s.fs.MkdirAll(dir, 0o755),
+				"creating parent directory for snapshot %s", s.path.String())
+		}
+		s.harness.NoErrorf(s.fs.WriteFile(s.path, []byte(got), 0o644),
+			"writing snapshot %s", s.path.String())
+		s.harness.Logf("updated snapshot: %s", s.path.String())
 		return
 	}
 
-	wantBytes, err := s.path.Resolved.ReadFile()
-	s.harness.NoErrorf(err, "snapshot %s not found; run with -update to create it", s.path.Input)
+	wantBytes, err := s.fs.ReadFile(s.path)
+	s.harness.NoErrorf(err, "snapshot %s not found; run with -update to create it", s.path.String())
 
-	AssertSame(s.harness, string(wantBytes), got, "snapshot "+s.path.Input)
+	AssertSame(s.harness, string(wantBytes), got, "snapshot "+s.path.String())
 }
