@@ -3,8 +3,6 @@ package check
 
 import (
 	"flag"
-	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -131,38 +129,6 @@ func AssertSame[T any](h BasicHarness, want, got T, what string, opts ...cmp.Opt
 	if diff := cmp.Diff(want, got, allOpts...); diff != "" {
 		h.Assertf(false, "%s mismatch (-want +got):\n%s", what, diff)
 	}
-}
-
-// WriteTree creates files and directories under root from a map.
-// Keys ending in "/" create directories (value must be "").
-// Other keys create files with the value as content.
-// All paths must be relative and stay within root.
-func (h Harness) WriteTree(rootStr string, tree map[string]string) {
-	h.t.Helper()
-	root, err := pathx.ResolveAbsPath(rootStr)
-	h.NoErrorf(err, "resolving absolute path for %q", rootStr)
-	for path, content := range tree {
-		h.Assertf(!filepath.IsAbs(path), "path %q must be relative to root %q", path, root.String())
-		rel := NewRelPath(path)
-		full := root.Join(rel)
-		h.Assertf(full.MakeRelativeTo(root).IsSome(), "path %q escapes root %q", path, root.String())
-		if strings.HasSuffix(path, "/") {
-			h.Assertf(content == "", "directory path %q must have empty content", path)
-			h.NoErrorf(full.MkdirAll(0o755), "creating directory %s", full.String())
-			continue
-		}
-		h.NoErrorf(full.Dir().MkdirAll(0o755), "creating parent directory for %s", full.String())
-		h.NoErrorf(full.WriteFile([]byte(content), 0o644), "writing file %s", full.String())
-	}
-}
-
-// WriteFile writes a single file, creating parent directories as needed.
-func (h Harness) WriteFile(path string, content string) {
-	h.t.Helper()
-	absPath, err := pathx.ResolveAbsPath(path)
-	h.NoErrorf(err, "resolving absolute path for %q", path)
-	dir, file := absPath.Split()
-	h.WriteTree(dir.String(), map[string]string{file: content})
 }
 
 // InputPath keeps both user-provided and resolved path forms.

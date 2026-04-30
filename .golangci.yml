@@ -66,7 +66,10 @@ linters:
           files:
             - $all
             - "!**/main.go"
+            # depguard special syntax: $test matches all *_test.go files.
+            # See https://golangci-lint.run/docs/linters/configuration/#depguard
             - "!$test"
+            - "!**/*_testkit/*.go"
           list-mode: lax
           deny:
             - pkg: "github.com/typesanitizer/happygo/common/syscaps$"

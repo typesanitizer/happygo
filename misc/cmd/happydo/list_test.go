@@ -6,10 +6,9 @@ import (
 	"testing"
 
 	"github.com/typesanitizer/happygo/common/check"
-	. "github.com/typesanitizer/happygo/common/check/prelude"
-	. "github.com/typesanitizer/happygo/common/core"
 	"github.com/typesanitizer/happygo/common/envx"
 	"github.com/typesanitizer/happygo/common/fsx"
+	"github.com/typesanitizer/happygo/common/fsx/fsx_testkit"
 	"github.com/typesanitizer/happygo/common/logx"
 	"github.com/typesanitizer/happygo/common/syscaps"
 	"github.com/typesanitizer/happygo/misc/internal/config"
@@ -19,16 +18,14 @@ func TestList(t *testing.T) {
 	h := check.New(t)
 	h.Parallel()
 
-	root := t.TempDir()
-	h.WriteTree(root, map[string]string{
+	repoFS := fsx_testkit.TempDirFS(h)
+	fsx_testkit.WriteTree(h, repoFS, map[string]string{
 		"alpha/go.mod": "module alpha\n",
 		"beta/go.mod":  "module beta\n",
 		"gamma/go.mod": "module gamma\n",
 		"delta/":       "",
 		"file.txt":     "not a dir\n",
 	})
-
-	repoFS := Do(syscaps.FS(NewAbsPath(root)))(h)
 
 	ws := Workspace{
 		FS:     repoFS,

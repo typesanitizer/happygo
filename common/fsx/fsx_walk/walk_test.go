@@ -58,8 +58,9 @@ func TestWalk(t *testing.T) {
 		h.Run("SymlinkNotFollowed", func(h check.Harness) {
 			h.Parallel()
 
-			parent := h.T().TempDir()
-			h.WriteTree(parent, map[string]string{"target/file.txt": "x"})
+			parentFS := fsx_testkit.TempDirFS(h)
+			parent := parentFS.Root().String()
+			fsx_testkit.WriteTree(h, parentFS, map[string]string{"target/file.txt": "x"})
 
 			target := filepath.Join(parent, "target")
 			link := filepath.Join(parent, "link")
