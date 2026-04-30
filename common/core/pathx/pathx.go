@@ -62,19 +62,6 @@ func (p AbsPath) MkdirAll(perm os.FileMode) error {
 	return os.MkdirAll(p.value, perm)
 }
 
-func (p AbsPath) RemoveAll() error {
-	return os.RemoveAll(p.value)
-}
-
-// TODO(varun): Replace with something that returns iter.Seq[Result[os.DirEntry]].
-func (p AbsPath) ReadDir() ([]os.DirEntry, error) {
-	return os.ReadDir(p.value)
-}
-
-func (p AbsPath) Stat() (os.FileInfo, error) {
-	return os.Stat(p.value)
-}
-
 func (p AbsPath) ReadFile() ([]byte, error) {
 	return os.ReadFile(p.value)
 }
