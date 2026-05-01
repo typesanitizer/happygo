@@ -1,0 +1,203 @@
+name: inspect-go-build-cache
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+  push:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  inspect:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    name: ${{ matrix.os }} / ${{ matrix.toolchain }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        toolchain: [head, gotip]
+    steps:
+      - name: Restore Go build cache
+        id: restore-cache
+        uses: actions/cache/restore@v5
+        with:
+          path: .cache/go-build
+          key: go-cache-${{ matrix.toolchain }}-${{ matrix.os }}-${{ github.sha }}
+          restore-keys: |
+            go-cache-${{ matrix.toolchain }}-${{ matrix.os }}-
+
+      - name: Inspect Go build cache
+        shell: bash
+        env:
+          CACHE_HIT: ${{ steps.restore-cache.outputs.cache-hit }}
+          CACHE_PRIMARY_KEY: ${{ steps.restore-cache.outputs.cache-primary-key }}
+          CACHE_MATCHED_KEY: ${{ steps.restore-cache.outputs.cache-matched-key }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p reports
+          report="reports/go-build-cache-${{ matrix.toolchain }}-${{ matrix.os }}.txt"
+          cache_dir=".cache/go-build"
+
+          {
+            echo "toolchain: ${{ matrix.toolchain }}"
+            echo "os: ${{ matrix.os }}"
+            echo "cache-hit: ${CACHE_HIT}"
+            echo "cache-primary-key: ${CACHE_PRIMARY_KEY}"
+            echo "cache-matched-key: ${CACHE_MATCHED_KEY}"
+            echo
+          } > "$report"
+
+          if [ ! -d "$cache_dir" ]; then
+            echo "cache directory not found: $cache_dir" | tee -a "$report"
+            exit 0
+          fi
+
+          if command -v python3 >/dev/null 2>&1; then
+            py=python3
+          else
+            py=python
+          fi
+
+          "$py" - "$cache_dir" >> "$report" <<'PY'
+          import datetime as dt
+          import os
+          import sys
+          import time
+          from collections import defaultdict
+
+          root = sys.argv[1]
+          now = time.time()
+
+          buckets = [
+              ("<1h", 0, 1 / 24),
+              ("1h-6h", 1 / 24, 6 / 24),
+              ("6h-1d", 6 / 24, 1),
+              ("1d-2d", 1, 2),
+              ("2d-3d", 2, 3),
+              ("3d-4d", 3, 4),
+              ("4d-5d", 4, 5),
+              ("5d-6d", 5, 6),
+              ("6d-7d", 6, 7),
+              (">=7d", 7, float("inf")),
+          ]
+          by_age = {label: {"files": 0, "bytes": 0} for label, _, _ in buckets}
+          by_suffix = defaultdict(lambda: {"files": 0, "bytes": 0})
+          by_size = defaultdict(lambda: {"files": 0, "bytes": 0})
+          by_top = defaultdict(lambda: {"files": 0, "bytes": 0})
+
+          total_files = 0
+          total_bytes = 0
+          oldest = None
+          newest = None
+
+          def size_bucket(size):
+              if size < 1024:
+                  return "<1KiB"
+              if size < 1024 * 1024:
+                  return "1KiB-1MiB"
+              if size < 10 * 1024 * 1024:
+                  return "1MiB-10MiB"
+              return ">=10MiB"
+
+          for dirpath, _, filenames in os.walk(root):
+              for name in filenames:
+                  path = os.path.join(dirpath, name)
+                  try:
+                      st = os.stat(path)
+                  except OSError:
+                      continue
+
+                  size = st.st_size
+                  age_days = (now - st.st_mtime) / 86400
+                  total_files += 1
+                  total_bytes += size
+                  oldest = st.st_mtime if oldest is None else min(oldest, st.st_mtime)
+                  newest = st.st_mtime if newest is None else max(newest, st.st_mtime)
+
+                  for label, lo, hi in buckets:
+                      if lo <= age_days < hi:
+                          by_age[label]["files"] += 1
+                          by_age[label]["bytes"] += size
+                          break
+
+                  if name.endswith("-a"):
+                      suffix = "-a"
+                  elif name.endswith("-d"):
+                      suffix = "-d"
+                  else:
+                      suffix = "other"
+                  by_suffix[suffix]["files"] += 1
+                  by_suffix[suffix]["bytes"] += size
+
+                  sb = size_bucket(size)
+                  by_size[sb]["files"] += 1
+                  by_size[sb]["bytes"] += size
+
+                  rel = os.path.relpath(path, root)
+                  top = rel.split(os.sep, 1)[0]
+                  by_top[top]["files"] += 1
+                  by_top[top]["bytes"] += size
+
+          def mib(n):
+              return n / 1024 / 1024
+
+          def fmt_time(ts):
+              if ts is None:
+                  return "<none>"
+              return dt.datetime.fromtimestamp(ts, dt.timezone.utc).isoformat()
+
+          print(f"root: {root}")
+          print(f"total files: {total_files}")
+          print(f"total size: {mib(total_bytes):.1f} MiB")
+          print(f"oldest mtime: {fmt_time(oldest)}")
+          print(f"newest mtime: {fmt_time(newest)}")
+
+          trim_path = os.path.join(root, "trim.txt")
+          if os.path.exists(trim_path):
+              try:
+                  raw = open(trim_path, "rb").read().strip()
+                  trim_ts = int(raw)
+                  print(f"trim.txt: {trim_ts} ({fmt_time(trim_ts)})")
+              except Exception as e:
+                  print(f"trim.txt: unreadable ({e})")
+          else:
+              print("trim.txt: <missing>")
+
+          print("\nmtime histogram:")
+          for label, _, _ in buckets:
+              s = by_age[label]
+              print(f"{label:>7}: {s['files']:9d} files  {mib(s['bytes']):10.1f} MiB")
+
+          print("\nby suffix:")
+          for suffix in sorted(by_suffix):
+              s = by_suffix[suffix]
+              print(f"{suffix:>7}: {s['files']:9d} files  {mib(s['bytes']):10.1f} MiB")
+
+          print("\nby file size:")
+          for label in ["<1KiB", "1KiB-1MiB", "1MiB-10MiB", ">=10MiB"]:
+              s = by_size[label]
+              print(f"{label:>10}: {s['files']:9d} files  {mib(s['bytes']):10.1f} MiB")
+
+          print("\ntop cache subdirs/files by size:")
+          for top, s in sorted(by_top.items(), key=lambda item: item[1]["bytes"], reverse=True)[:40]:
+              print(f"{top:>10}: {s['files']:9d} files  {mib(s['bytes']):10.1f} MiB")
+          PY
+
+          cat "$report"
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: go-build-cache-report-${{ matrix.toolchain }}-${{ matrix.os }}
+          path: reports/*.txt
+          retention-days: 1
