@@ -1,4 +1,13 @@
-# Git style guide
+# Version control style guide
+
+## Commit hygiene
+
+Keep history clean. Generally, a PR should only have 1 commit.
+The goal is a clean, logical commit history where each commit
+represents a coherent change.
+
+This approach maintains bisectability and makes code review easier
+by keeping related changes together.
 
 ## Commit messages
 
