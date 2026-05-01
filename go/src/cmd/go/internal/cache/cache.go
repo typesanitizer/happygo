@@ -341,14 +341,29 @@ func (c *DiskCache) OutputFile(out OutputID) string {
 // We scan the cache for entries to delete at most once per trimInterval (1 day).
 //
 // When we do scan the cache, we delete entries that have not been used for
-// at least trimLimit (5 days). Statistics gathered from a month of usage by
+// at least defaultTrimLimit (5 days). Statistics gathered from a month of usage by
 // Go developers found that essentially all reuse of cached entries happened
 // within 5 days of the previous reuse. See golang.org/issue/22990.
 const (
-	mtimeInterval = 1 * time.Hour
-	trimInterval  = 24 * time.Hour
-	trimLimit     = 5 * 24 * time.Hour
+	mtimeInterval    = 1 * time.Hour
+	trimInterval     = 24 * time.Hour
+	defaultTrimLimit = 5 * 24 * time.Hour
 )
+
+func trimLimit() (time.Duration, error) {
+	value := os.Getenv("HAPPYGO_TRIM_CACHE_LIMIT")
+	if value == "" {
+		return defaultTrimLimit, nil
+	}
+	limit, err := time.ParseDuration(value)
+	if err != nil {
+		return 0, fmt.Errorf("invalid HAPPYGO_TRIM_CACHE_LIMIT: %w", err)
+	}
+	if limit < 0 {
+		return 0, fmt.Errorf("invalid HAPPYGO_TRIM_CACHE_LIMIT %q: must be non-negative", value)
+	}
+	return limit, nil
+}
 
 // markUsed makes a best-effort attempt to update mtime on file,
 // so that mtime reflects cache access time.
@@ -377,6 +392,10 @@ func (c *DiskCache) Close() error { return c.Trim() }
 // Trim removes old cache entries that are likely not to be reused.
 func (c *DiskCache) Trim() error {
 	now := c.now()
+	limit, err := trimLimit()
+	if err != nil {
+		return err
+	}
 
 	// We maintain in dir/trim.txt the time of the last completed cache trim.
 	// If the cache has been trimmed recently enough, do nothing.
@@ -406,7 +425,7 @@ func (c *DiskCache) Trim() error {
 
 	// Write the new timestamp before we start trimming to reduce the chance that multiple invocations
 	// try to trim at the same time, causing contention in CI (#76314).
-	err := lockedfile.Transform(filepath.Join(c.dir, "trim.txt"), func(data []byte) ([]byte, error) {
+	err = lockedfile.Transform(filepath.Join(c.dir, "trim.txt"), func(data []byte) ([]byte, error) {
 		if skipTrim(data) {
 			// The timestamp in the file no longer meets the criteria for us to
 			// do a trim. It must have been updated by another go command invocation
@@ -426,7 +445,7 @@ func (c *DiskCache) Trim() error {
 	// Trim each of the 256 subdirectories.
 	// We subtract an additional mtimeInterval
 	// to account for the imprecision of our "last used" mtimes.
-	cutoff := now.Add(-trimLimit - mtimeInterval)
+	cutoff := now.Add(-limit - mtimeInterval)
 	for i := 0; i < 256; i++ {
 		subdir := filepath.Join(c.dir, fmt.Sprintf("%02x", i))
 		c.trimSubdir(subdir, cutoff)

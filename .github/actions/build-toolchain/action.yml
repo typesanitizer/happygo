@@ -47,12 +47,16 @@ runs:
     - name: Build (unix)
       if: runner.os != 'Windows'
       shell: bash
+      env:
+        HAPPYGO_TRIM_CACHE_LIMIT: ${{ inputs.toolchain == 'head' && '24h' || '' }}
       # make.bash cannot be invoked from other directories.
       working-directory: go/src
       run: ./make.bash
     - name: Build (windows)
       if: runner.os == 'Windows'
       shell: pwsh
+      env:
+        HAPPYGO_TRIM_CACHE_LIMIT: ${{ inputs.toolchain == 'head' && '24h' || '' }}
       # .\make.bat cannot be invoked from other directories.
       working-directory: go/src
       run: .\make.bat

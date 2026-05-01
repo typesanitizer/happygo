@@ -11,6 +11,7 @@ import (
 	"internal/testenv"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -132,6 +133,56 @@ func dummyID(x int) [HashSize]byte {
 	var out [HashSize]byte
 	binary.LittleEndian.PutUint64(out[:], uint64(x))
 	return out
+}
+
+func TestCacheTrimLimitEnv(t *testing.T) {
+	t.Setenv("HAPPYGO_TRIM_CACHE_LIMIT", "24h")
+
+	dir := t.TempDir()
+	c, err := Open(dir)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	const start = 1000000000
+	now := int64(start)
+	c.now = func() time.Time { return time.Unix(now, 0) }
+
+	oldID := ActionID(dummyID(1))
+	if err := PutBytes(c, oldID, []byte("old")); err != nil {
+		t.Fatal(err)
+	}
+
+	now = start + 2*86400
+	recentID := ActionID(dummyID(2))
+	if err := PutBytes(c, recentID, []byte("recent")); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := c.Trim(); err != nil {
+		if testenv.SyscallIsNotSupported(err) {
+			t.Skipf("skipping: Trim is unsupported (%v)", err)
+		}
+		t.Fatal(err)
+	}
+	if _, err := c.Get(oldID); err == nil {
+		t.Fatal("Trim did not remove entry older than HAPPYGO_TRIM_CACHE_LIMIT")
+	}
+	if _, err := c.Get(recentID); err != nil {
+		t.Fatalf("Trim removed recent entry: %v", err)
+	}
+}
+
+func TestCacheTrimLimitEnvInvalid(t *testing.T) {
+	t.Setenv("HAPPYGO_TRIM_CACHE_LIMIT", "not-a-duration")
+
+	dir := t.TempDir()
+	c, err := Open(dir)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if err := c.Trim(); err == nil || !strings.Contains(err.Error(), "HAPPYGO_TRIM_CACHE_LIMIT") {
+		t.Fatalf("Trim error = %v, want HAPPYGO_TRIM_CACHE_LIMIT error", err)
+	}
 }
 
 func TestCacheTrim(t *testing.T) {
