@@ -12,7 +12,7 @@ import (
 	"github.com/typesanitizer/happygo/common/assert"
 	"github.com/typesanitizer/happygo/common/check"
 	. "github.com/typesanitizer/happygo/common/check/prelude"
-	. "github.com/typesanitizer/happygo/common/core"
+	"github.com/typesanitizer/happygo/common/core/pathx"
 	"github.com/typesanitizer/happygo/common/envx"
 	"github.com/typesanitizer/happygo/common/envx/envx_path"
 	"github.com/typesanitizer/happygo/common/errorx"
@@ -37,7 +37,7 @@ func testFindExecutableHappyPath(h check.Harness) {
 
 	h.Run("PATH behavior", func(h check.Harness) {
 		fs := newMemFS(h, fakeRoot.JoinComponents("path-behavior"))
-		binRel := NewRelPath("bin")
+		binRel := pathx.NewRelPath("bin")
 		h.NoErrorf(fs.MkdirAll(binRel, 0o755), "MkdirAll(%q)", binRel)
 		exeRel := binRel.JoinComponents(exe.Name)
 		writeExecutable(h, fs, exeRel)
@@ -79,9 +79,9 @@ func testFindExecutableHappyPath(h check.Harness) {
 			h.T().Skip("Windows-specific exec.LookPath compatibility tests")
 		}
 
-		root := NewAbsPath(h.T().TempDir())
+		root := pathx.NewAbsPath(h.T().TempDir())
 		fs := Do(syscaps.FS(root))(h)
-		binRel := NewRelPath("bin")
+		binRel := pathx.NewRelPath("bin")
 		binDir := root.Join(binRel)
 		h.NoErrorf(fs.MkdirAll(binRel, 0o755), "MkdirAll(%q)", binRel)
 
@@ -149,7 +149,7 @@ func testFindExecutableErrorCases(h check.Harness) {
 		}
 
 		fs := newMemFS(h, fakeRoot.JoinComponents("non-executable-candidates"))
-		binRel := NewRelPath("bin")
+		binRel := pathx.NewRelPath("bin")
 		exeRel := binRel.JoinComponents(exe.Name)
 		fsx_testkit.WriteFile(h, fs, exeRel, "#!/bin/sh\n")
 
@@ -183,9 +183,9 @@ func testFindExecutableErrorCases(h check.Harness) {
 	})
 
 	h.Run("exec.LookPath compatibility", func(h check.Harness) {
-		root := NewAbsPath(h.T().TempDir())
+		root := pathx.NewAbsPath(h.T().TempDir())
 		fs := Do(syscaps.FS(root))(h)
-		binRel := NewRelPath("bin")
+		binRel := pathx.NewRelPath("bin")
 		binDir := root.Join(binRel)
 		h.NoErrorf(fs.MkdirAll(binRel, 0o755), "MkdirAll(%q)", binRel)
 		exeRel := binRel.JoinComponents(exe.Name)
@@ -278,7 +278,7 @@ func testFindExecutablePreconditions(h check.Harness) {
 	})
 }
 
-func newMemFS(h check.Harness, root AbsPath) fsx.FS {
+func newMemFS(h check.Harness, root pathx.AbsPath) fsx.FS {
 	h.T().Helper()
 	return Do(fsx.MemMap(root))(h)
 }
@@ -306,7 +306,7 @@ func hostOSExecutable() hostExecutable {
 	return hostExecutable{Name: "tool", LookupName: "tool"}
 }
 
-func writeExecutable(h check.Harness, fs fsx.FS, path RelPath) {
+func writeExecutable(h check.Harness, fs fsx.FS, path pathx.RelPath) {
 	h.T().Helper()
 	h.NoErrorf(fs.WriteFile(path, []byte("#!/bin/sh\n"), 0o755), "WriteFile(%q)", path)
 }

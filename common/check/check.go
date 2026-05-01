@@ -8,7 +8,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	. "github.com/typesanitizer/happygo/common/core"
 	"github.com/typesanitizer/happygo/common/core/pathx"
 )
 
@@ -134,20 +133,20 @@ func AssertSame[T any](h BasicHarness, want, got T, what string, opts ...cmp.Opt
 
 // SnapshotFS is the filesystem capability needed by snapshots.
 type SnapshotFS interface {
-	ReadFile(RelPath) ([]byte, error)
-	WriteFile(RelPath, []byte, os.FileMode) error
-	MkdirAll(RelPath, os.FileMode) error
+	ReadFile(pathx.RelPath) ([]byte, error)
+	WriteFile(pathx.RelPath, []byte, os.FileMode) error
+	MkdirAll(pathx.RelPath, os.FileMode) error
 }
 
 // Snapshot holds a path for file-based snapshot comparison.
 type Snapshot struct {
 	harness Harness
 	fs      SnapshotFS
-	path    RelPath
+	path    pathx.RelPath
 }
 
 // SnapshotAt returns a Snapshot for the given path in fs.
-func (h Harness) SnapshotAt(fs SnapshotFS, path RelPath) Snapshot {
+func (h Harness) SnapshotAt(fs SnapshotFS, path pathx.RelPath) Snapshot {
 	h.t.Helper()
 	return Snapshot{harness: h, fs: fs, path: path}
 }

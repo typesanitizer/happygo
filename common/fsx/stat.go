@@ -3,7 +3,6 @@ package fsx
 import (
 	"os"
 
-	. "github.com/typesanitizer/happygo/common/core"
 	"github.com/typesanitizer/happygo/common/core/pathx"
 )
 
@@ -19,7 +18,7 @@ import (
 // opts.OnErrorTraverseParents is true, StatError.ShortestMissing() returns the
 // shallowest ancestor that does not exist. Otherwise, ShortestMissing()
 // returns rel.
-func (fs rootedFS) Stat(rel RelPath, opts StatOptions) (os.FileInfo, error) {
+func (fs rootedFS) Stat(rel pathx.RelPath, opts StatOptions) (os.FileInfo, error) {
 	var info os.FileInfo
 	var err error
 	if opts.FollowFinalSymlink {
@@ -58,7 +57,7 @@ func (fs rootedFS) Stat(rel RelPath, opts StatOptions) (os.FileInfo, error) {
 		}
 	}
 	if lo < len(seps) {
-		return nil, &StatError{fsError: err, shortestMissing: NewRelPath(raw[:seps[lo]])}
+		return nil, &StatError{fsError: err, shortestMissing: pathx.NewRelPath(raw[:seps[lo]])}
 	}
 	// All ancestors exist; the leaf itself is the shallowest missing.
 	return nil, &StatError{fsError: err, shortestMissing: rel}
@@ -80,7 +79,7 @@ type StatOptions struct {
 // missing ancestor when OnErrorTraverseParents was set.
 type StatError struct {
 	fsError         error
-	shortestMissing RelPath
+	shortestMissing pathx.RelPath
 }
 
 func (e *StatError) Error() string {
@@ -93,6 +92,6 @@ func (e *StatError) Unwrap() error {
 
 // ShortestMissing returns the shallowest missing path component. If
 // OnErrorTraverseParents was not set, this equals the original path.
-func (e *StatError) ShortestMissing() RelPath {
+func (e *StatError) ShortestMissing() pathx.RelPath {
 	return e.shortestMissing
 }

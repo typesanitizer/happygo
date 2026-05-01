@@ -10,7 +10,6 @@ import (
 
 	"github.com/typesanitizer/happygo/common/check"
 	. "github.com/typesanitizer/happygo/common/check/prelude"
-	. "github.com/typesanitizer/happygo/common/core"
 	"github.com/typesanitizer/happygo/common/core/pathx"
 	"github.com/typesanitizer/happygo/common/core/pathx/pathx_testkit"
 	"github.com/typesanitizer/happygo/common/errorx"
@@ -35,7 +34,7 @@ func TestFSStat(t *testing.T) {
 			h.T().Skipf("symlinks not supported on this platform")
 		}
 
-		repoFS := Do(syscaps.FS(NewAbsPath(link)))(h)
+		repoFS := Do(syscaps.FS(pathx.NewAbsPath(link)))(h)
 
 		followed := Do(repoFS.Stat(pathx.Dot(), fsx.StatOptions{
 			FollowFinalSymlink:     true,
@@ -57,7 +56,7 @@ func TestFSStat(t *testing.T) {
 	h.Run("ShortestMissingProperties", func(h check.Harness) {
 		h.Parallel()
 
-		root := NewAbsPath(h.T().TempDir())
+		root := pathx.NewAbsPath(h.T().TempDir())
 		componentsGen := rapid.SliceOfN(pathx_testkit.ComponentGen(), 1, 6)
 		rapid.Check(h.T(), func(t *rapid.T) {
 			h := check.NewBasic(t)
@@ -91,14 +90,14 @@ func TestFSStat(t *testing.T) {
 	})
 }
 
-func joinedRelPath(components []string) RelPath {
+func joinedRelPath(components []string) pathx.RelPath {
 	if len(components) == 0 {
 		return pathx.Dot()
 	}
-	return NewRelPath(filepath.Join(components...))
+	return pathx.NewRelPath(filepath.Join(components...))
 }
 
-func requireStatError(h check.BasicHarness, err error, rel RelPath, opts fsx.StatOptions) *fsx.StatError {
+func requireStatError(h check.BasicHarness, err error, rel pathx.RelPath, opts fsx.StatOptions) *fsx.StatError {
 	call := fmt.Sprintf("Stat(%q, fsx.StatOptions{FollowFinalSymlink: %t, OnErrorTraverseParents: %t})",
 		rel, opts.FollowFinalSymlink, opts.OnErrorTraverseParents)
 	h.Assertf(err != nil, "%s unexpectedly succeeded", call)

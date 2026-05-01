@@ -12,8 +12,9 @@ import (
 
 	"github.com/typesanitizer/happygo/common/check"
 	. "github.com/typesanitizer/happygo/common/check/prelude"
-	. "github.com/typesanitizer/happygo/common/core"
+	"github.com/typesanitizer/happygo/common/core/option"
 	"github.com/typesanitizer/happygo/common/core/pathx"
+	"github.com/typesanitizer/happygo/common/core/result"
 	"github.com/typesanitizer/happygo/common/fsx/fsx_testkit"
 	"github.com/typesanitizer/happygo/common/fsx/fsx_walk"
 	"github.com/typesanitizer/happygo/common/iterx"
@@ -21,7 +22,7 @@ import (
 	"github.com/typesanitizer/happygo/common/syscaps"
 )
 
-type WalkResultSeq = iter.Seq[Result[fsx_walk.FSWalkEntry]]
+type WalkResultSeq = iter.Seq[result.Result[fsx_walk.FSWalkEntry]]
 
 func TestWalk(t *testing.T) {
 	h := check.New(t)
@@ -462,17 +463,17 @@ func joinWalkPath(prefix, name string) string {
 
 func firstWalkError(h check.Harness, entries WalkResultSeq) error {
 	h.T().Helper()
-	var impl func(WalkResultSeq) Option[error]
-	impl = func(entries WalkResultSeq) Option[error] {
-		return iterx.Find(entries, func(entryRes Result[fsx_walk.FSWalkEntry]) Option[error] {
+	var impl func(WalkResultSeq) option.Option[error]
+	impl = func(entries WalkResultSeq) option.Option[error] {
+		return iterx.Find(entries, func(entryRes result.Result[fsx_walk.FSWalkEntry]) option.Option[error] {
 			entry, err := entryRes.Get()
 			if err != nil {
-				return Some(err)
+				return option.Some(err)
 			}
 			if entry.IsDir() {
 				return impl(entry.ChildrenNonDet())
 			}
-			return None[error]()
+			return option.None[error]()
 		})
 	}
 	err, ok := impl(entries).Get()

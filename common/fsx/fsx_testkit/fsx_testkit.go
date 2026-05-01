@@ -8,7 +8,8 @@ import (
 	"strings"
 
 	"github.com/typesanitizer/happygo/common/check"
-	. "github.com/typesanitizer/happygo/common/core"
+	"github.com/typesanitizer/happygo/common/core/pathx"
+	"github.com/typesanitizer/happygo/common/core/result"
 	"github.com/typesanitizer/happygo/common/errorx"
 	"github.com/typesanitizer/happygo/common/fsx"
 	"github.com/typesanitizer/happygo/common/syscaps"
@@ -17,7 +18,7 @@ import (
 // TempDirFS returns a host FS rooted at a new test temporary directory.
 func TempDirFS(h check.Harness) fsx.FS {
 	h.T().Helper()
-	fs, err := syscaps.FS(NewAbsPath(h.T().TempDir()))
+	fs, err := syscaps.FS(pathx.NewAbsPath(h.T().TempDir()))
 	h.NoErrorf(err, "FS(TempDir())")
 	return fs
 }
@@ -31,7 +32,7 @@ func NewMemFS(h check.Harness) fsx.FS {
 }
 
 // WriteFile writes a single file, creating parent directories as needed.
-func WriteFile(h check.Harness, fs fsx.FS, path RelPath, content string) {
+func WriteFile(h check.Harness, fs fsx.FS, path pathx.RelPath, content string) {
 	h.T().Helper()
 	if dir, ok := path.Dir().Get(); ok {
 		h.NoErrorf(fs.MkdirAll(dir, 0o755), "MkdirAll(%q)", dir)
@@ -46,7 +47,7 @@ func WriteTree(h check.Harness, fs fsx.FS, tree map[string]string) {
 	h.T().Helper()
 	for path, content := range tree {
 		h.Assertf(path != "", "path must not be empty")
-		rel := NewRelPath(path)
+		rel := pathx.NewRelPath(path)
 		if strings.HasSuffix(path, "/") {
 			h.Assertf(content == "", "directory path %q must have empty content", path)
 			h.NoErrorf(fs.MkdirAll(rel, 0o755), "MkdirAll(%q)", rel)
@@ -74,7 +75,7 @@ const (
 // Fault describes one injected filesystem failure.
 type Fault struct {
 	Op  FaultOp
-	Rel RelPath
+	Rel pathx.RelPath
 }
 
 // faultyFS wraps an fsx.FS and injects failures for configured operations.
@@ -91,37 +92,37 @@ func newFaultyFS(base fsx.FS, faults ...Fault) *faultyFS {
 	return &faultyFS{FS: base, faults: faultSet}
 }
 
-func (fs *faultyFS) Stat(rel RelPath, opts fsx.StatOptions) (os.FileInfo, error) {
+func (fs *faultyFS) Stat(rel pathx.RelPath, opts fsx.StatOptions) (os.FileInfo, error) {
 	if fs.hasFault(FaultOp_Stat, rel) {
 		return nil, injectedFSError()
 	}
 	return fs.FS.Stat(rel, opts)
 }
 
-func (fs *faultyFS) Open(rel RelPath) (fsx.File, error) {
+func (fs *faultyFS) Open(rel pathx.RelPath) (fsx.File, error) {
 	if fs.hasFault(FaultOp_Open, rel) {
 		return nil, injectedFSError()
 	}
 	return fs.FS.Open(rel)
 }
 
-func (fs *faultyFS) ReadFile(rel RelPath) ([]byte, error) {
+func (fs *faultyFS) ReadFile(rel pathx.RelPath) ([]byte, error) {
 	if fs.hasFault(FaultOp_Open, rel) {
 		return nil, injectedFSError()
 	}
 	return fs.FS.ReadFile(rel)
 }
 
-func (fs *faultyFS) ReadDir(rel RelPath) iter.Seq[Result[fsx.DirEntry]] {
+func (fs *faultyFS) ReadDir(rel pathx.RelPath) iter.Seq[result.Result[fsx.DirEntry]] {
 	if fs.hasFault(FaultOp_Open, rel) {
-		return func(yield func(Result[fsx.DirEntry]) bool) {
-			yield(Failure[fsx.DirEntry](injectedFSError()))
+		return func(yield func(result.Result[fsx.DirEntry]) bool) {
+			yield(result.Failure[fsx.DirEntry](injectedFSError()))
 		}
 	}
 	return fs.FS.ReadDir(rel)
 }
 
-func (fs *faultyFS) hasFault(op FaultOp, rel RelPath) bool {
+func (fs *faultyFS) hasFault(op FaultOp, rel pathx.RelPath) bool {
 	_, hit := fs.faults[Fault{Op: op, Rel: rel}]
 	return hit
 }
@@ -130,9 +131,9 @@ func injectedFSError() error {
 	return errorx.New("nostack", "injected fs error")
 }
 
-func FakeRoot() AbsPath {
+func FakeRoot() pathx.AbsPath {
 	if runtime.GOOS == "windows" {
-		return NewAbsPath(`C:\virtual-root`)
+		return pathx.NewAbsPath(`C:\virtual-root`)
 	}
-	return NewAbsPath("/virtual-root")
+	return pathx.NewAbsPath("/virtual-root")
 }

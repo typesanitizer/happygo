@@ -9,7 +9,7 @@ import (
 
 	cockroach "github.com/cockroachdb/errors" //nolint:depguard // In designated wrapper package
 	"github.com/typesanitizer/happygo/common/assert"
-	. "github.com/typesanitizer/happygo/common/core"
+	"github.com/typesanitizer/happygo/common/core/option"
 	"github.com/typesanitizer/happygo/common/iterx"
 )
 
@@ -221,14 +221,14 @@ func GetRootCause(err error) RootCauseResult {
 // the root cause (if one was found) to the type parameter.
 //
 // Pre-condition: err != nil, and err's nesting does not exceed [NESTING_LIMIT].
-func GetRootCauseAs[T error](err error) Option[T] {
+func GetRootCauseAs[T error](err error) option.Option[T] {
 	r := GetRootCause(err)
 	assert.Precondition(!r.HitNestingLimit(), "hit nesting limit during traversal; cannot cast root cause")
 	if r.HitMultiError() {
-		return None[T]()
+		return option.None[T]()
 	}
 	v, ok := r.GetRootCause().(T)
-	return NewOption(v, ok)
+	return option.NewOption(v, ok)
 }
 
 // FindInChainAs traverses the error chain and returns the first error
@@ -242,11 +242,11 @@ func GetRootCauseAs[T error](err error) Option[T] {
 // wraps some other errors.
 //
 // Pre-condition: err != nil, and err's nesting does not exceed [NESTING_LIMIT].
-func FindInChainAs[T error](err error) Option[T] {
-	return iterx.Find(Chain(err), func(link ChainLink) Option[T] {
+func FindInChainAs[T error](err error) option.Option[T] {
+	return iterx.Find(Chain(err), func(link ChainLink) option.Option[T] {
 		assert.Precondition(!link.HitNestingLimit(), "hit nesting limit during traversal")
 		v, ok := link.Current().(T)
-		return NewOption(v, ok)
+		return option.NewOption(v, ok)
 	})
 }
 

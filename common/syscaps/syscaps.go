@@ -12,8 +12,8 @@ import (
 
 	"github.com/typesanitizer/happygo/common/assert"
 	"github.com/typesanitizer/happygo/common/cmdx"
-	. "github.com/typesanitizer/happygo/common/core"
 	"github.com/typesanitizer/happygo/common/core/pair"
+	"github.com/typesanitizer/happygo/common/core/pathx"
 	"github.com/typesanitizer/happygo/common/envx"
 	"github.com/typesanitizer/happygo/common/errorx"
 	"github.com/typesanitizer/happygo/common/fsx"
@@ -34,7 +34,7 @@ func Env() envx.Env {
 }
 
 // FS returns a rooted filesystem backed by the host operating system.
-func FS(root AbsPath) (fsx.FS, error) {
+func FS(root pathx.AbsPath) (fsx.FS, error) {
 	base, ok := afero.NewOsFs().(fsx.BaseFS)
 	assert.Invariantf(ok, "NewOsFs return value should implement fsx.BaseFS, but got type %T", base)
 	return fsx.NewRootedFS(root, base)

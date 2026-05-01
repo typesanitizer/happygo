@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/typesanitizer/happygo/common/assert"
-	. "github.com/typesanitizer/happygo/common/core"
 	"github.com/typesanitizer/happygo/common/core/pathx"
 	"github.com/typesanitizer/happygo/common/envx"
 	"github.com/typesanitizer/happygo/common/errorx"
@@ -51,26 +50,26 @@ var NotExecutableErr = errorx.New("nostack", "not an executable file")
 //     to [NotExecutableErr].
 //
 // Pre-condition: name is non-empty and does not contain path separators.
-func FindExecutable(fs fsx.FS, env envx.Env, name string) (AbsPath, error) {
+func FindExecutable(fs fsx.FS, env envx.Env, name string) (pathx.AbsPath, error) {
 	assert.Preconditionf(name != "", "name is empty")
 	assert.Preconditionf(!pathx.HasPathSeparators(name), "name contains path separators: %q", name)
 
 	pathEnvVar, ok := env.Lookup("PATH").Get()
 	if !ok || pathEnvVar == "" {
-		return AbsPath{}, errorx.NewProblem(errorx.Code_InvalidArgument, "PATH must be set and non-empty")
+		return pathx.AbsPath{}, errorx.NewProblem(errorx.Code_InvalidArgument, "PATH must be set and non-empty")
 	}
 	var ignoredPaths []IgnoredPath
 	for searchDir := range searchDirs(pathEnvVar) {
-		var dir AbsPath
+		var dir pathx.AbsPath
 		if searchDir.isRelative {
-			dir = fs.Root().Join(NewRelPath(searchDir.pathEntry))
+			dir = fs.Root().Join(pathx.NewRelPath(searchDir.pathEntry))
 		} else {
-			dir = NewAbsPath(searchDir.pathEntry)
+			dir = pathx.NewAbsPath(searchDir.pathEntry)
 		}
 		if !dir.MakeRelativeTo(fs.Root()).IsSome() {
 			err := errorx.NewProblem(errorx.Code_AccessDenied,
 				fmt.Sprintf("PATH entry %q resolves outside filesystem root %q", searchDir.pathEntry, fs.Root()))
-			return AbsPath{}, wrapIgnored(err, ignoredPaths)
+			return pathx.AbsPath{}, wrapIgnored(err, ignoredPaths)
 		}
 		for candidatePath := range candidatePaths(env, dir.JoinComponents(name)) {
 			rootRel, ok := candidatePath.MakeRelativeTo(fs.Root()).Get()
@@ -106,13 +105,13 @@ func FindExecutable(fs fsx.FS, env envx.Env, name string) (AbsPath, error) {
 	}
 	err := errorx.Wrapf("nostack", os.ErrNotExist,
 		"failed to find executable %q in PATH %q", name, pathEnvVar)
-	return AbsPath{}, wrapIgnored(err, ignoredPaths)
+	return pathx.AbsPath{}, wrapIgnored(err, ignoredPaths)
 }
 
 // IgnoredPath records a candidate path that was found but skipped during
 // executable search.
 type IgnoredPath struct {
-	Path AbsPath
+	Path pathx.AbsPath
 	// Err is guaranteed to be non-nil.
 	Err error
 }
@@ -172,8 +171,8 @@ func searchDirs(pathEnvVar string) iter.Seq[searchDir] {
 // This largely matters for Windows because on Windows, the
 // search needs to look at extensions inferred via the PATHEXT
 // environment variable, in case base itself doesn't have an extension.
-func candidatePaths(env envx.Env, base AbsPath) iter.Seq[AbsPath] {
-	return func(yield func(AbsPath) bool) {
+func candidatePaths(env envx.Env, base pathx.AbsPath) iter.Seq[pathx.AbsPath] {
+	return func(yield func(pathx.AbsPath) bool) {
 		if runtime.GOOS != "windows" || filepath.Ext(base.String()) != "" {
 			yield(base)
 			return
