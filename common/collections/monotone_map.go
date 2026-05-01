@@ -3,8 +3,8 @@ package collections
 import (
 	"iter"
 
-	. "github.com/typesanitizer/happygo/common/core"
 	"github.com/typesanitizer/happygo/common/core/op"
+	"github.com/typesanitizer/happygo/common/core/option"
 )
 
 // MonotoneMap is a mutable map that preserves insertion order of keys,
@@ -50,9 +50,9 @@ func (m MonotoneMap[K, V]) CloneWithout(omit Set[K]) MonotoneMap[K, V] {
 // Lookup returns the value for key, if present.
 //
 // Expected time: Θ(1).
-func (m MonotoneMap[K, V]) Lookup(key K) Option[V] {
+func (m MonotoneMap[K, V]) Lookup(key K) option.Option[V] {
 	value, ok := m.values[key]
-	return NewOption(value, ok)
+	return option.NewOption(value, ok)
 }
 
 // Len returns the number of entries.
@@ -89,11 +89,11 @@ func (m *MonotoneMap[K, V]) InsertOrKeep(key K, value V) op.InsertResult {
 // one existed.
 //
 // Expected time: Θ(1).
-func (m *MonotoneMap[K, V]) InsertOrReplace(key K, value V) Option[V] {
+func (m *MonotoneMap[K, V]) InsertOrReplace(key K, value V) option.Option[V] {
 	old, ok := m.values[key]
 	if !ok {
 		m.keys = append(m.keys, key)
 	}
 	m.values[key] = value
-	return NewOption(old, ok)
+	return option.NewOption(old, ok)
 }

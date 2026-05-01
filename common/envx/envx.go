@@ -8,8 +8,8 @@ import (
 
 	"github.com/typesanitizer/happygo/common/assert"
 	"github.com/typesanitizer/happygo/common/collections"
-	. "github.com/typesanitizer/happygo/common/core"
 	"github.com/typesanitizer/happygo/common/core/op"
+	"github.com/typesanitizer/happygo/common/core/option"
 	"github.com/typesanitizer/happygo/common/core/pair"
 )
 
@@ -72,12 +72,12 @@ func NewIgnoringDupes(kvs iter.Seq[pair.KeyValue[string, string]]) Env {
 // Lookup returns the value for key, if present.
 //
 // Expected time: Θ(1).
-func (env Env) Lookup(key string) Option[string] {
+func (env Env) Lookup(key string) option.Option[string] {
 	entry, ok := env.entries.Lookup(canonicalKey(key)).Get()
 	if !ok {
-		return None[string]()
+		return option.None[string]()
 	}
-	return Some(entry.value)
+	return option.Some(entry.value)
 }
 
 // Entries returns the environment as "key=value" strings, similar to
@@ -122,21 +122,21 @@ func (env Env) InsertOrKeep(key string, value string) (Env, op.InsertResult) {
 // Θ(|env|).
 // Additional space: Θ(1) if env already stores the exact key-value pair.
 // Otherwise, Θ(|env|).
-func (env Env) InsertOrReplace(key string, value string) (Env, Option[string]) {
+func (env Env) InsertOrReplace(key string, value string) (Env, option.Option[string]) {
 	canonical := canonicalKey(key)
 	old, hadOld := env.entries.Lookup(canonical).Get()
 	// Preserve the latest inserted key spelling for Entries(). If only the
 	// spelling changes under canonicalization, we still need to replace.
 	if hadOld && old.key == key && old.value == value {
-		return env, Some(old.value)
+		return env, option.Some(old.value)
 	}
 
 	next := env.entries.CloneWithout(collections.NewSet[string]())
 	prev, ok := next.InsertOrReplace(canonical, envEntry{key: key, value: value}).Get()
 	if !ok {
-		return Env{entries: next}, None[string]()
+		return Env{entries: next}, option.None[string]()
 	}
-	return Env{entries: next}, Some(prev.value)
+	return Env{entries: next}, option.Some(prev.value)
 }
 
 // CloneWithout returns a shallow clone of env with keys in omit removed, if

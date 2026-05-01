@@ -16,8 +16,8 @@ import (
 	"github.com/typesanitizer/happygo/common/fsx/fsx_name"
 
 	"github.com/typesanitizer/happygo/common/assert"
-	. "github.com/typesanitizer/happygo/common/core"
 	"github.com/typesanitizer/happygo/common/core/pathx"
+	"github.com/typesanitizer/happygo/common/core/result"
 	"github.com/typesanitizer/happygo/common/errorx"
 	"github.com/typesanitizer/happygo/common/internal/constants"
 	"github.com/typesanitizer/happygo/common/iterx"
@@ -63,27 +63,27 @@ type BaseFS interface {
 
 // FS is a rooted filesystem. All methods operate on paths relative to Root().
 type FS interface {
-	Root() AbsPath
-	ReadDir(rel RelPath) iter.Seq[Result[DirEntry]]
-	Open(rel RelPath) (File, error)
-	ReadFile(rel RelPath) ([]byte, error)
-	WriteFile(rel RelPath, data []byte, perm os.FileMode) error
-	MkdirAll(rel RelPath, perm os.FileMode) error
-	MkdirTemp(dir RelPath, pattern string) (RelPath, error)
-	RemoveAll(rel RelPath) error
-	Stat(rel RelPath, opts StatOptions) (os.FileInfo, error)
+	Root() pathx.AbsPath
+	ReadDir(rel pathx.RelPath) iter.Seq[result.Result[DirEntry]]
+	Open(rel pathx.RelPath) (File, error)
+	ReadFile(rel pathx.RelPath) ([]byte, error)
+	WriteFile(rel pathx.RelPath, data []byte, perm os.FileMode) error
+	MkdirAll(rel pathx.RelPath, perm os.FileMode) error
+	MkdirTemp(dir pathx.RelPath, pattern string) (pathx.RelPath, error)
+	RemoveAll(rel pathx.RelPath) error
+	Stat(rel pathx.RelPath, opts StatOptions) (os.FileInfo, error)
 }
 
 // rootedFS is the standard FS implementation backed by an afero filesystem.
 type rootedFS struct {
 	// Stored separately because afero.BasePathFs does not expose its configured
 	// root path back to callers, but fsx needs to provide Root().
-	root AbsPath
+	root pathx.AbsPath
 	base BaseFS
 }
 
 // MemMap returns an in-memory FS rooted at root.
-func MemMap(root AbsPath) (FS, error) {
+func MemMap(root pathx.AbsPath) (FS, error) {
 	backing := afero.NewMemMapFs()
 	if err := backing.MkdirAll(root.String(), 0o755); err != nil {
 		return nil, errorx.Wrapf("+stacks", err, "create fs root %s", root)
@@ -96,7 +96,7 @@ func MemMap(root AbsPath) (FS, error) {
 // NewRootedFS returns an FS rooted at root and backed by backing.
 //
 // Pre-condition: root must already exist in backing and be a directory.
-func NewRootedFS(root AbsPath, backing BaseFS) (FS, error) {
+func NewRootedFS(root pathx.AbsPath, backing BaseFS) (FS, error) {
 	info, err := backing.Stat(root.String())
 	if err != nil {
 		return nil, errorx.Wrapf("+stacks", err, "stat fs root %s", root)
@@ -111,7 +111,7 @@ func NewRootedFS(root AbsPath, backing BaseFS) (FS, error) {
 }
 
 // Root returns the absolute path this FS is rooted at.
-func (fs rootedFS) Root() AbsPath {
+func (fs rootedFS) Root() pathx.AbsPath {
 	return fs.root
 }
 
@@ -120,21 +120,21 @@ func (fs rootedFS) Root() AbsPath {
 // Errors produced mid-iteration are surfaced as [Failure] elements
 // rather than being returned eagerly. Callers should stop iterating on the
 // first failure.
-func (fs rootedFS) ReadDir(rel RelPath) iter.Seq[Result[DirEntry]] {
-	return iterx.Map(iterx.Unbatch(fs.readDirBatches(rel)), func(entryRes Result[iofs.DirEntry]) Result[DirEntry] {
+func (fs rootedFS) ReadDir(rel pathx.RelPath) iter.Seq[result.Result[DirEntry]] {
+	return iterx.Map(iterx.Unbatch(fs.readDirBatches(rel)), func(entryRes result.Result[iofs.DirEntry]) result.Result[DirEntry] {
 		entry, err := entryRes.Get()
 		if err != nil {
-			return Failure[DirEntry](err)
+			return result.Failure[DirEntry](err)
 		}
-		return Success[DirEntry](dirEntry{entry: entry})
+		return result.Success[DirEntry](dirEntry{entry: entry})
 	})
 }
 
-func (fs rootedFS) readDirBatches(rel RelPath) iter.Seq[Result[[]iofs.DirEntry]] {
-	return func(yield func(Result[[]iofs.DirEntry]) bool) {
+func (fs rootedFS) readDirBatches(rel pathx.RelPath) iter.Seq[result.Result[[]iofs.DirEntry]] {
+	return func(yield func(result.Result[[]iofs.DirEntry]) bool) {
 		f, err := fs.base.Open(rel.String())
 		if err != nil {
-			yield(Failure[[]iofs.DirEntry](err))
+			yield(result.Failure[[]iofs.DirEntry](err))
 			return
 		}
 		defer func() {
@@ -147,7 +147,7 @@ func (fs rootedFS) readDirBatches(rel RelPath) iter.Seq[Result[[]iofs.DirEntry]]
 		for {
 			entries, err := rdf.ReadDir(constants.ReadDirBatchSize)
 			if len(entries) > 0 {
-				if !yield(Success(entries)) {
+				if !yield(result.Success(entries)) {
 					return
 				}
 			}
@@ -162,7 +162,7 @@ func (fs rootedFS) readDirBatches(rel RelPath) iter.Seq[Result[[]iofs.DirEntry]]
 			case io.EOF:
 				return
 			default:
-				yield(Failure[[]iofs.DirEntry](err))
+				yield(result.Failure[[]iofs.DirEntry](err))
 				return
 			}
 		}
@@ -170,23 +170,23 @@ func (fs rootedFS) readDirBatches(rel RelPath) iter.Seq[Result[[]iofs.DirEntry]]
 }
 
 // Open opens the file at the given root-relative path for reading.
-func (fs rootedFS) Open(rel RelPath) (File, error) {
+func (fs rootedFS) Open(rel pathx.RelPath) (File, error) {
 	return fs.base.Open(rel.String())
 }
 
 // ReadFile reads the file at the given root-relative path.
-func (fs rootedFS) ReadFile(rel RelPath) ([]byte, error) {
+func (fs rootedFS) ReadFile(rel pathx.RelPath) ([]byte, error) {
 	return afero.ReadFile(fs.base, rel.String())
 }
 
 // WriteFile writes data to the file at the given root-relative path.
-func (fs rootedFS) WriteFile(rel RelPath, data []byte, perm os.FileMode) error {
+func (fs rootedFS) WriteFile(rel pathx.RelPath, data []byte, perm os.FileMode) error {
 	return afero.WriteFile(fs.base, rel.String(), data, perm)
 }
 
 // MkdirAll creates the directory at the given root-relative path along with
 // any necessary parents.
-func (fs rootedFS) MkdirAll(rel RelPath, perm os.FileMode) error {
+func (fs rootedFS) MkdirAll(rel pathx.RelPath, perm os.FileMode) error {
 	return fs.base.MkdirAll(rel.String(), perm)
 }
 
@@ -194,20 +194,20 @@ func (fs rootedFS) MkdirAll(rel RelPath, perm os.FileMode) error {
 // whose name begins with pattern, and returns the resulting root-relative path.
 //
 // Pre-condition: pattern is non-empty and contains no path separators.
-func (fs rootedFS) MkdirTemp(dir RelPath, pattern string) (RelPath, error) {
+func (fs rootedFS) MkdirTemp(dir pathx.RelPath, pattern string) (pathx.RelPath, error) {
 	assert.Preconditionf(pattern != "", "pattern is empty")
 	assert.Preconditionf(!pathx.HasPathSeparators(pattern), "pattern contains path separator: %q", pattern)
 	// afero.TempDir returns filepath.Join(dir, pattern+rand) relative to fs.base,
 	// so the returned path is already root-relative rather than just a basename.
 	tmpDir, err := afero.TempDir(fs.base, dir.String(), pattern)
 	if err != nil {
-		return RelPath{}, err
+		return pathx.RelPath{}, err
 	}
-	return NewRelPath(tmpDir), nil
+	return pathx.NewRelPath(tmpDir), nil
 }
 
 // RemoveAll removes the file or directory at the given root-relative path
 // along with any children it contains.
-func (fs rootedFS) RemoveAll(rel RelPath) error {
+func (fs rootedFS) RemoveAll(rel pathx.RelPath) error {
 	return fs.base.RemoveAll(rel.String())
 }

@@ -10,7 +10,6 @@ import (
 	"github.com/typesanitizer/happygo/common/check"
 	. "github.com/typesanitizer/happygo/common/check/prelude"
 	"github.com/typesanitizer/happygo/common/collections"
-	. "github.com/typesanitizer/happygo/common/core"
 	"github.com/typesanitizer/happygo/common/core/pathx"
 	"github.com/typesanitizer/happygo/common/fsx/fsx_testkit"
 	"github.com/typesanitizer/happygo/common/internal/constants"
@@ -57,7 +56,7 @@ func TestFSReadDirOnFileReturnsError(t *testing.T) {
 
 	repoFS := fsx_testkit.TempDirFS(h)
 
-	fileRel := NewRelPath("file.txt")
+	fileRel := pathx.NewRelPath("file.txt")
 	h.NoErrorf(repoFS.WriteFile(fileRel, []byte("data"), 0o644), "WriteFile(%q)", fileRel)
 
 	gotAny := false

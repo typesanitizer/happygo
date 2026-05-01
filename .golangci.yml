@@ -74,6 +74,13 @@ linters:
           deny:
             - pkg: "github.com/typesanitizer/happygo/common/syscaps$"
               desc: "ambient system capabilities should only be accessed via common/syscaps at program edges or in tests"
+        NoCommonCoreInsideCommon:
+          files:
+            - "common/**/*.go"
+          list-mode: lax
+          deny:
+            - pkg: "github.com/typesanitizer/happygo/common/core$"
+              desc: "common/core is an aggregate convenience package for other modules; code under common/ should import smaller common/core/* packages directly"
     importas:
       no-unaliased: true
       alias:
