@@ -34,12 +34,12 @@ func Env() envx.Env {
 }
 
 // WorkingDirectory returns the process working directory.
-func WorkingDirectory() (AbsPath, error) {
+func WorkingDirectory() (pathx.AbsPath, error) {
 	wd, err := os.Getwd()
 	if err != nil {
-		return AbsPath{}, err
+		return pathx.AbsPath{}, err
 	}
-	return NewAbsPath(wd), nil
+	return pathx.NewAbsPath(wd), nil
 }
 
 // FS returns a rooted filesystem backed by the host operating system.
