@@ -1,3 +1,7 @@
+// Copyright 2026 Varun Gandhi
+//
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 // Package op provides small operation-result newtypes for APIs where a named
 // boolean result is clearer than a raw bool.
 //

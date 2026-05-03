@@ -1,3 +1,7 @@
+// Copyright 2026 Varun Gandhi
+//
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 // Package result provides a generic Result[T] type holding either a value or
 // an error.
 package result

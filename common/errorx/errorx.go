@@ -1,3 +1,7 @@
+// Copyright 2026 Varun Gandhi
+//
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 // Package errorx wraps cockroachdb/errors for consistent error handling.
 // All error creation in first-party code should go through this package.
 package errorx

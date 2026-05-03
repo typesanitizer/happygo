@@ -1,3 +1,7 @@
+// Copyright 2026 Varun Gandhi
+//
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 package collections
 
 import "github.com/typesanitizer/happygo/common/assert"

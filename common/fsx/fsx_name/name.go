@@ -1,11 +1,15 @@
+// Copyright 2026 Varun Gandhi
+//
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 package fsx_name
 
 import (
 	"fmt"
+	"runtime"
 	"strings"
 
 	"github.com/typesanitizer/happygo/common/assert"
-	"github.com/typesanitizer/happygo/common/core/pathx"
 )
 
 // --- Aliases for external use ---
@@ -53,10 +57,17 @@ func Parse(s string) (Name, error) {
 	if s == "" {
 		return Name{}, &NameParseError{ParseErrorKind_EmptyName, ""}
 	}
-	if pathx.HasPathSeparators(s) {
+	if hasPathSeparators(s) {
 		return Name{}, &NameParseError{ParseErrorKind_HasPathSeparators, s}
 	}
 	return Name{s}, nil
+}
+
+func hasPathSeparators(s string) bool {
+	if runtime.GOOS == "windows" {
+		return strings.ContainsAny(s, `\\/`)
+	}
+	return strings.Contains(s, "/")
 }
 
 // See ParseError for doc comment.

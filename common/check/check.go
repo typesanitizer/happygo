@@ -1,8 +1,13 @@
+// Copyright 2026 Varun Gandhi
+//
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 // Package check provides test assertion and snapshot helpers.
 package check
 
 import (
 	"flag"
+	"io"
 	"os"
 	"testing"
 
@@ -117,6 +122,12 @@ func (h Harness) Run(name string, f func(Harness)) {
 func (h Harness) T() *testing.T {
 	h.t.Helper()
 	return h.t
+}
+
+// Close closes c, failing the test if closing fails.
+func (h Harness) Close(c io.Closer) {
+	h.t.Helper()
+	h.NoErrorf(c.Close(), "closing resource")
 }
 
 // AssertSame compares want and got using cmp.Diff and fails with a diff if they differ.

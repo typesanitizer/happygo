@@ -1,3 +1,7 @@
+// Copyright 2026 Varun Gandhi
+//
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 package fsx_walk_test
 
 import (
@@ -108,6 +112,21 @@ ignored/
 			[]string{".gitignore", "sub", "sub/.gitignore", "sub/file.txt", "sub/keep.log"},
 			got,
 		)
+	})
+
+	h.Run("HidesGitMetadata", func(h check.Harness) {
+		h.Parallel()
+
+		fs := fsx_testkit.NewMemFS(h)
+		fsx_testkit.WriteTree(h, fs, map[string]string{
+			".git":       "gitdir: root\n",
+			".gitignore": "",
+			"file.txt":   "x",
+		})
+
+		entries := Do(fsx_walk.WalkNonDet(fs, pathx.Dot(), fsx_walk.WalkOptions{RespectGitIgnore: true}))(h)
+		got := collectPaths(h, entries)
+		checkVisitedPaths(h, []string{".gitignore", "file.txt"}, got)
 	})
 
 	h.Run("RequiresFSRootRepo", func(h check.Harness) {
@@ -279,7 +298,7 @@ func testGitIgnore_ResetsAtNestedRepo(h check.Harness) {
 		checkVisitedPaths(
 			h,
 			[]string{
-				".gitignore", "nested", "nested/.git", "nested/child",
+				".gitignore", "nested", "nested/child",
 				"nested/child/file.txt", "nested/inside.txt",
 			},
 			got,

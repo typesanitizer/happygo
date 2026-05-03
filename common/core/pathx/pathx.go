@@ -1,3 +1,7 @@
+// Copyright 2026 Varun Gandhi
+//
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 // Package pathx provides typed path wrappers for host platform paths.
 //
 // These types improve code clarity and catch potential bugs (e.g. accidentally
@@ -13,6 +17,7 @@ import (
 
 	"github.com/typesanitizer/happygo/common/assert"
 	"github.com/typesanitizer/happygo/common/core/option"
+	"github.com/typesanitizer/happygo/common/fsx/fsx_name"
 )
 
 // AbsPath carries an absolute path that has gone through [LexicallyNormalize].
@@ -62,9 +67,33 @@ func (p AbsPath) rootLen() int {
 	return rootLen
 }
 
-func (p AbsPath) Split() (AbsPath, string) {
+func (p AbsPath) Split() (AbsPath, fsx_name.Name) {
 	dir, file := filepath.Split(p.value)
-	return NewAbsPath(dir), file
+	return NewAbsPath(dir), fsx_name.New(file)
+}
+
+// Ancestors returns an iterator over p's ancestor absolute paths,
+// in shortest-first order. The receiver itself is not yielded.
+//
+// For example, "/a/b/c" yields "/a" then "/a/b". A filesystem root
+// or a path directly below a filesystem root yields nothing.
+func (p AbsPath) Ancestors() iter.Seq[AbsPath] {
+	return func(yield func(AbsPath) bool) {
+		rootLen := p.rootLen()
+		for i := rootLen; i < len(p.value); i++ {
+			if !IsPathSeparator(p.value[i]) {
+				continue
+			}
+			// A trailing separator means the ancestor would equal the
+			// receiver semantically; stop here.
+			if i == len(p.value)-1 {
+				return
+			}
+			if !yield(AbsPath{p.value[:i]}) {
+				return
+			}
+		}
+	}
 }
 
 // LexicallyContains reports whether child is lexically contained within p.

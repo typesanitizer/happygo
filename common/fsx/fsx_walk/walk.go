@@ -1,3 +1,7 @@
+// Copyright 2026 Varun Gandhi
+//
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 // Package fsx_walk provides directory walking over fsx.FS with optional
 // .gitignore handling.
 package fsx_walk
@@ -152,6 +156,9 @@ func (seq walkDirSeq) iterate(yield func(result.Result[FSWalkEntry]) bool) {
 		}
 
 		name := de.BaseName()
+		if seq.w.opts.RespectGitIgnore && name.String() == ".git" {
+			continue
+		}
 		child := seq.dir.JoinComponents(name.String())
 		isDir := de.IsDir()
 

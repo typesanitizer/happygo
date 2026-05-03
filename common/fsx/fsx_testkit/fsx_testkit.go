@@ -1,3 +1,7 @@
+// Copyright 2026 Varun Gandhi
+//
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 // Package fsx_testkit provides test helpers for fsx.FS values.
 package fsx_testkit
 
@@ -99,11 +103,11 @@ func (fs *faultyFS) Stat(rel pathx.RelPath, opts fsx.StatOptions) (os.FileInfo, 
 	return fs.FS.Stat(rel, opts)
 }
 
-func (fs *faultyFS) Open(rel pathx.RelPath) (fsx.File, error) {
+func (fs *faultyFS) Open(rel pathx.RelPath, opts fsx.OpenOptions) (fsx.File, error) {
 	if fs.hasFault(FaultOp_Open, rel) {
 		return nil, injectedFSError()
 	}
-	return fs.FS.Open(rel)
+	return fs.FS.Open(rel, opts)
 }
 
 func (fs *faultyFS) ReadFile(rel pathx.RelPath) ([]byte, error) {

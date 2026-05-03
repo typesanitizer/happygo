@@ -1,3 +1,7 @@
+// Copyright 2026 Varun Gandhi
+//
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 // Package fsx provides a rooted filesystem wrapper over [afero.Fs] that
 // operates on [RelPath] values anchored at a repo-root [AbsPath].
 //
@@ -29,6 +33,18 @@ var ErrNotExist = iofs.ErrNotExist
 // File is an open file handle returned by [FS.Open] and similar methods.
 // It is an alias for [afero.File] so callers need not import afero directly.
 type File = afero.File
+
+type OpenMode int
+
+const (
+	OpenMode_ReadOnly OpenMode = iota + 1
+	OpenMode_WriteOnly
+	OpenMode_ReadWrite
+)
+
+type OpenOptions struct {
+	Mode OpenMode
+}
 
 // DirEntry is a single entry returned by [FS.ReadDir].
 type DirEntry interface {
@@ -65,7 +81,7 @@ type BaseFS interface {
 type FS interface {
 	Root() pathx.AbsPath
 	ReadDir(rel pathx.RelPath) iter.Seq[result.Result[DirEntry]]
-	Open(rel pathx.RelPath) (File, error)
+	Open(rel pathx.RelPath, opts OpenOptions) (File, error)
 	ReadFile(rel pathx.RelPath) ([]byte, error)
 	WriteFile(rel pathx.RelPath, data []byte, perm os.FileMode) error
 	MkdirAll(rel pathx.RelPath, perm os.FileMode) error
@@ -169,9 +185,22 @@ func (fs rootedFS) readDirBatches(rel pathx.RelPath) iter.Seq[result.Result[[]io
 	}
 }
 
-// Open opens the file at the given root-relative path for reading.
-func (fs rootedFS) Open(rel pathx.RelPath) (File, error) {
-	return fs.base.Open(rel.String())
+// Open opens the file at the given root-relative path.
+func (fs rootedFS) Open(rel pathx.RelPath, opts OpenOptions) (File, error) {
+	return fs.base.OpenFile(rel.String(), openFlags(opts.Mode), 0)
+}
+
+func openFlags(mode OpenMode) int {
+	switch mode {
+	case OpenMode_ReadOnly:
+		return os.O_RDONLY
+	case OpenMode_WriteOnly:
+		return os.O_WRONLY
+	case OpenMode_ReadWrite:
+		return os.O_RDWR
+	default:
+		return assert.PanicUnknownCase[int](mode)
+	}
 }
 
 // ReadFile reads the file at the given root-relative path.
