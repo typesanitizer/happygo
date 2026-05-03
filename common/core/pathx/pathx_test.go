@@ -1,9 +1,14 @@
+// Copyright 2026 Varun Gandhi
+//
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 package pathx_test
 
 import (
 	"fmt"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -107,12 +112,29 @@ func TestSplit(t *testing.T) {
 			components := componentsGen.Draw(t, "components")
 			path := root.JoinComponents(components...)
 			dir, file := path.Split()
-			check.AssertSame(basic, components[len(components)-1], file, "Split() file")
+			check.AssertSame(basic, components[len(components)-1], file.String(), "Split() file")
 
-			reconstructed := dir.Join(pathx.NewRelPath(file))
+			reconstructed := dir.Join(pathx.NewRelPath(file.String()))
 			check.AssertSame(basic, path.String(), reconstructed.String(), "Split() round-trip")
 		})
 	})
+}
+
+func TestAbsPathAncestors(t *testing.T) {
+	h := check.New(t)
+
+	path := pathx.NewAbsPath(h.T().TempDir()).JoinComponents("a", "b", "c")
+	got := iterx.Collect(iterx.Map(path.Ancestors(), pathx.AbsPath.String))
+	var reverse []string
+	for parent, ok := path.Dir().Get(); ok; parent, ok = parent.Dir().Get() {
+		if parent.Dir().IsNone() {
+			break
+		}
+		reverse = append(reverse, parent.String())
+	}
+	slices.Reverse(reverse)
+	want := reverse
+	check.AssertSame(h, want, got, "Ancestors()")
 }
 
 func TestRelPathComponents(t *testing.T) {

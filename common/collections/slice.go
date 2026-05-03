@@ -1,3 +1,7 @@
+// Copyright 2026 Varun Gandhi
+//
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 package collections
 
 // FilterSlice returns a new slice containing only elements for which pred returns true.

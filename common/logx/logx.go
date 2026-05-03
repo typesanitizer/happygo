@@ -1,3 +1,7 @@
+// Copyright 2026 Varun Gandhi
+//
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 // Package logx provides a configured structured logger.
 // All logging in this project should use a logger obtained from this package.
 package logx
