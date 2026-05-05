@@ -62,6 +62,15 @@ linters:
           deny:
             - pkg: "os/exec$"
               desc: "use cmdx abstractions instead of os/exec directly; only common/syscaps and common/envx/envx_path are allowed to import it"
+        NoStdlibTime:
+          files:
+            - $all
+            - "!**/common/time/*.go"
+            - "!**/common/syscaps/*.go"
+          list-mode: lax
+          deny:
+            - pkg: "time"
+              desc: "use common/time instead"
         NoDirectSyscaps:
           files:
             - $all

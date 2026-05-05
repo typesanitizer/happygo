@@ -10,9 +10,7 @@ import (
 	"os"
 	"strings"
 	"sync"
-	"time"
 
-	"github.com/typesanitizer/happygo/common/fsx/fsx_name"
 	"github.com/urfave/cli/v3"
 
 	"github.com/typesanitizer/happygo/common/cmdx"
@@ -20,8 +18,10 @@ import (
 	. "github.com/typesanitizer/happygo/common/core"
 	"github.com/typesanitizer/happygo/common/errorx"
 	"github.com/typesanitizer/happygo/common/fsx"
+	"github.com/typesanitizer/happygo/common/fsx/fsx_name"
 	"github.com/typesanitizer/happygo/common/logx"
 	"github.com/typesanitizer/happygo/common/syscaps"
+	"github.com/typesanitizer/happygo/common/time"
 	"github.com/typesanitizer/happygo/misc/internal/config"
 )
 
@@ -111,7 +111,8 @@ func main() {
 						return err
 					}
 					logCtx := logx.NewLogCtx(ctx, logger)
-					return ws.runSyncPR(logCtx, projects, RunSyncPROptions{
+					clock := syscaps.SystemClock()
+					return ws.runSyncPR(logCtx, clock, projects, RunSyncPROptions{
 						Base: NewOption(cmd.String("base"), cmd.IsSet("base")),
 					})
 				},
