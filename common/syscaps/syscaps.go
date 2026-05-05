@@ -11,8 +11,10 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	stdlib_time "time"
 
 	"github.com/spf13/afero" //nolint:depguard // syscaps is the ambient-authority boundary
+	"github.com/typesanitizer/happygo/common/time"
 
 	"github.com/typesanitizer/happygo/common/assert"
 	"github.com/typesanitizer/happygo/common/cmdx"
@@ -97,4 +99,14 @@ func (runner CmdRunner) Run(ctx logx.LogCtx, cmd cmdx.Cmd, options cmdx.RunOptio
 
 func (runner CmdRunner) ExecAll(ctx logx.LogCtx, cmds ...cmdx.Cmd) error {
 	return cmdx.BaseRunnerExecAll(runner, ctx, cmds...)
+}
+
+func SystemClock() time.SystemClock {
+	return systemClock{}
+}
+
+type systemClock struct{}
+
+func (s systemClock) Now() time.SystemTime {
+	return time.NewSystemTime(stdlib_time.Now())
 }
